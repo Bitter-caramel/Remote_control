@@ -1,0 +1,643 @@
+2026-09-12 11:21:04 [SYS] 上线 127.0.0.1:54240
+2026-09-12 11:21:43 [SYS] 终端窗口接入
+[?9001h[?1004h[?25l[2J[m[H
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[H]0;C:\Windows\SYSTEM32\cmd.exe[?25h[?25l[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K[H]0;C:\Windows\SYSTEM32\cmd.exe - chcp  65001[?25h
+C:\Users\Elysia>d]0;C:\Windows\SYSTEM32\cmd.exeir
+[?25l Volume in drive C is OS
+ Volume Serial Number is E0AB-1C59[6;1H Directory of C:\Users\Elysia[8;1H2026/09/10  10:47    <DIR>          .
+2025/08/17  09:22    <DIR>          ..
+2026/08/24  12:22    <DIR>          .agent-browser
+2026/05/20  11:34    <DIR>          .ai_completion
+2025/11/12  21:11    <DIR>          .android
+2026/02/15  01:20    <DIR>          .aws
+2026/02/15  01:20    <DIR>          .azure
+2026/06/14  18:26             3,218 .bash_history
+2026/05/29  15:52    <DIR>          .bundle
+2026/08/20  15:16            11,030 .burpmcp-ultra-activity.jsonl
+2026/08/20  15:09             1,544 .burpmcp-ultra-audit.jsonl
+2026/06/03  22:16    <DIR>          .cache
+2026/08/03  10:27    <DIR>          .cc-switch
+2026/05/26  20:17    <DIR>          .cherrystudio
+2026/08/03  10:38    <DIR>          .claude
+2026/08/03  16:12             4,490 .claude.json
+2026/08/03  16:31    <DIR>          .cli-anything-gimp
+2026/09/12  10:14    <DIR>          .codegeex
+2026/09/11  17:20    <DIR>          .codex
+2026/09/11  17:17    <DIR>          .codex-session-delete
+2026/07/22  14:19    <DIR>          .config
+2026/08/06  21:20    <DIR>          .copilot
+2026/07/20  21:00    <DIR>          .crawl4ai]0;C:\Windows\SYSTEM32\cmd.exe - dir[?25h
+2026/09/04  15:45    <DIR>          .docker
+2026/08/17  22:32    <DIR>          .dsh
+2026/05/07  19:49    <DIR>          .e4mc_cache
+2026/06/01  14:04                25 .et_marker
+2026/05/18  17:20    <DIR>          .fiddler
+2026/04/19  10:02    <DIR>          .ghcp-appmod
+2026/04/19  10:02    <DIR>          .ghcp-appmod-java
+2026/09/09  21:02               328 .gitconfig
+2026/01/15  23:38    <DIR>          .gradle
+2025/12/26  15:09               316 .heyboxacc.conf
+2026/05/20  11:34    <DIR>          .icube-remote-ssh
+2025/12/07  21:07    <DIR>          .idlerc
+2026/05/22  11:34    <DIR>          .ipython
+2026/01/02  15:01    <DIR>          .jdks
+2025/12/11  13:15    <DIR>          .leigod
+2026/09/02  14:49                26 .lesshst
+2026/05/29  15:54    <DIR>          .local
+2026/01/08  17:52    <DIR>          .m2
+2026/08/17  18:45    <JUNCTION>     .marvis [C:\Users\Elysia\AppData\Roaming\Tencent\Marvis\User\oAN1i2ZodEq-f4Lnd3YuwVq
+[29;120Hq0FNwY]
+2025/12/20  12:59    <DIR>          .ms-ad
+2026/04/19  19:53                 0 .node_repl_history
+2026/07/31  13:06                42 .npmrc
+2026/06/27  22:49    <DIR>          .nuclei-plus
+2026/06/05  11:52    <DIR>          .ollama
+2026/06/05  23:04    <DIR>          .openclaw
+2026/03/14  12:28    <DIR>          .openjfx
+2026/05/13  07:53               182 .packettracer
+2026/07/12  16:24               110 .python_history
+2026/07/16  13:32    <DIR>          .qoder-cn
+2026/05/23  15:53    <DIR>          .rustup
+2026/06/27  11:46    <DIR>          .sbx-denybin
+2026/08/03  10:37    <DIR>          .ssh
+2026/09/10  17:56    <DIR>          .trae-cn
+2026/08/29  10:46    <DIR>          .venv-html-to-docx
+2026/05/08  14:48    <DIR>          .VirtualBox
+2025/08/17  11:26    <DIR>          .vscode
+2026/05/06  11:30    <DIR>          .vscode-shared
+2026/08/29  16:05    <DIR>          .workbuddy
+2026/08/23  12:44    <DIR>          .workbuddy-key-fallback
+2026/06/30  22:54    <DIR>          .zenmap
+2026/04/19  20:08                82 .zshrc
+2025/08/17  12:15    <DIR>          ansel
+2026/05/08  14:37    <DIR>          Cisco Packet Tracer 6.0
+2025/08/17  16:45    <DIR>          CodeGeeXProjects
+2025/08/17  09:06    <DIR>          Contacts
+2026/03/18  22:40    <DIR>          CrossDevice
+2025/09/05  10:34            40,960 data.db
+2026/08/16  23:11    <DIR>          DaVinci Resolve Media
+2026/09/10  22:24    <DIR>          Desktop
+2026/09/03  23:35    <DIR>          Documents
+2026/08/17  18:34    <DIR>          Doubao
+2026/09/11  17:12    <DIR>          Downloads
+2026/04/16  11:33    <DIR>          Favorites
+2026/09/07  21:48    <DIR>          go
+2025/08/17  09:06    <DIR>          Links
+2026/08/19  20:15    <DIR>          mitan
+2026/04/16  11:33    <DIR>          Music
+2026/05/29  13:20    <DIR>          OneDrive
+2026/04/19  19:48    <DIR>          openclaw-cn
+2026/07/15  21:39    <DIR>          Pictures
+2026/02/10  18:16    <DIR>          Postman
+2026/08/23  10:14    <DIR>          reports
+2025/10/10  12:13    <DIR>          Saved Games
+2025/08/17  09:22    <DIR>          Searches
+2026/05/29  21:28    <DIR>          Videos
+2026/08/29  10:46    <DIR>          WorkBuddy
+2026/08/01  12:58    <DIR>          WPS Cloud
+2025/09/17  10:16    <DIR>          WPSDrive
+2026/08/10  23:18    <DIR>          新建文件夹
+              14 File(s)         62,353 bytes
+              78 Dir(s)  60,756,942,848 bytes free
+]0;C:\Windows\SYSTEM32\cmd.exe
+C:\Users\Elysia>d:
+
+D:\>cd AAAha  study
+
+D:\AAAstudy>dir
+ Volume in drive D is 学习]0;C:\Windows\SYSTEM32\cmd.exe - dir
+ Volume Serial Number is 2A42-3173
+
+ Directory of D:\AAAstudy
+
+2026/09/07  13:02    <DIR>          .
+2026/08/24  12:14    <DIR>          CTF总结
+2026/09/09  21:06    <DIR>          githubGoodPj
+2026/08/11  16:47    <DIR>          听课
+2026/03/08  17:54    <DIR>          实训笔记-其一
+2026/09/11  19:46    <DIR>          实训笔记-其二
+2026/07/14  20:47    <DIR>          渗透
+2026/06/24  20:34    <DIR>          电子书
+2026/07/31  17:51    <DIR>          考研学习笔记
+2026/09/01  14:01    <DIR>          考研导师
+2026/08/19  21:09    <DIR>          英语
+               0 File(s)              0 bytes
+              11 Dir(s)  48,182,358,016 bytes free
+]0;C:\Windows\SYSTEM32\cmd.exe
+D:\AAAstudy>wsl -d kali-linux
+]0;C:\Windows\SYSTEM32\cmd.exe - wsl  -d kali-linux┏━([36m[1mMessage from Kali developers[m)
+┃
+┃ This is a minimal installation of Kali Linux, you likely
+┃ want to install supplementary tools. Learn how:
+┃ ⇒ https://www.kali.org/docs/troubleshooting/common-minimum-setup/
+┃
+┗━([37m[2mRun: “touch ~/.hushlogin” to hide this message[m)[K]3008;start=961590e6-de7b-4a0b-9068-be6544cc5913;machineid=5e91118635724e4ba187e0e1e063b8f2;user=kali;hostname=Elysia;bootid=405272f0-2b7d-4074-8dc7-a210347e0969;pid=00000000000000000340;type=shell;cwd=/mnt/d/AAAstudy\[?2004h
+[32m┌──([34m[1mkali㉿Elysia[32m[22m)-[[m[1m/mnt/d/AAAstudy[32m[22m][K]0;kali@Elysia: /mnt/d/AAAstudy[m
+[32m└─[34m[1m$[m[K[1C[32m└─[34m[1m$[m c[32m└─[34m[1m$[m [1Clear[?2004l
+]3008;start=355568e0-b3da-4144-82b0-1eb915685f59;machineid=5e91118635724e4ba187e0e1e063b8f2;user=kali;hostname=Elysia;bootid=405272f0-2b7d-4074-8dc7-a210347e0969;pid=00000000000000000340;type=command;cwd=/mnt/d/AAAstudy\[?25l[H[?25h[2J[3J]3008;end=355568e0-b3da-4144-82b0-1eb915685f59;exit=success\]3008;start=961590e6-de7b-4a0b-9068-be6544cc5913;machineid=5e91118635724e4ba187e0e1e063b8f2;user=kali;hostname=Elysia;bootid=405272f0-2b7d-4074-8dc7-a210347e0969;pid=00000000000000000340;type=shell;cwd=/mnt/d/AAAstudy\[?2004h[?25l[K[32m
+┌──([34m[1mkali㉿Elysia[32m[22m)-[[m[1m/mnt/d/AAAstudy[32m[22m][K
+└─[34m[1m$[m[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K[3;5H[?25h[32m└─[34m[1m$[m l[32m└─[34m[1m$[m[K[1C[32m└─[34m[1m$[m l[32m└─[34m[1m$[m [1Cs[?2004l
+]3008;start=b7c21df3-dbef-4229-88c6-fe450b506da7;machineid=5e91118635724e4ba187e0e1e063b8f2;user=kali;hostname=Elysia;bootid=405272f0-2b7d-4074-8dc7-a210347e0969;pid=00000000000000000340;type=command;cwd=/mnt/d/AAAstudy\]3008;end=b7c21df3-dbef-4229-88c6-fe450b506da7;exit=success\]3008;start=961590e6-de7b-4a0b-9068-be6544cc5913;machineid=5e91118635724e4ba187e0e1e063b8f2;user=kali;hostname=Elysia;bootid=405272f0-2b7d-4074-8dc7-a210347e0969;pid=00000000000000000340;type=shell;cwd=/mnt/d/AAAstudy\[?2004h[?25l[30m[44mCTF总结[m  [30m[44mgithubGoodPj[m  [30m[44m听课[m  [30m[44m实训笔记-其一[m  [30m[44m实训笔记-其二[m  [30m[44m渗透[m  [30m[44m电子书[m  [30m[44m考研学习笔记[m  [30m[44m考研导师[m  [30m[44m英语[32m[49m[6;1H┌──([34m[1mkali㉿Elysia[32m[22m)-[[m[1m/mnt/d/AAAstudy[32m[22m]
+└─[34m[1m$[m [?25h[32m└─[34m[1m$[m  [32m└─[34m[1m$[m [1Ccd [K[32m└─[34m[1m$[m [2C[K[32m└─[34m[1m$[m [1C[K[32m└─[34m[1m$[m[K[1C[32m└─[34m[1m$[m [32m└─[34m[1m$[m [32m└─[34m[1m$[m [32m└─[34m[1m$[m [32m└─[34m[1m$[m [32m└─[34m[1m$[m c[32m└─[34m[1m$[m [1Cd ~[?2004l
+]3008;start=5d8a35ac-57d7-4c1e-b704-1f0fabacc587;machineid=5e91118635724e4ba187e0e1e063b8f2;user=kali;hostname=Elysia;bootid=405272f0-2b7d-4074-8dc7-a210347e0969;pid=00000000000000000340;type=command;cwd=/mnt/d/AAAstudy\]3008;end=5d8a35ac-57d7-4c1e-b704-1f0fabacc587;exit=success\]3008;start=961590e6-de7b-4a0b-9068-be6544cc5913;machineid=5e91118635724e4ba187e0e1e063b8f2;user=kali;hostname=Elysia;bootid=405272f0-2b7d-4074-8dc7-a210347e0969;pid=00000000000000000340;type=shell;cwd=/home/kali\[?2004h[32m
+┌──([34m[1mkali㉿Elysia[32m[22m)-[[m[1m~[32m[22m]
+└─[34m[1m$[m ]0;kali@Elysia: ~[32m└─[34m[1m$[m ls[?2004l
+]3008;start=5810bbb5-2717-46c3-a469-40a74522912e;machineid=5e91118635724e4ba187e0e1e063b8f2;user=kali;hostname=Elysia;bootid=405272f0-2b7d-4074-8dc7-a210347e0969;pid=00000000000000000340;type=command;cwd=/home/kali\]3008;end=5810bbb5-2717-46c3-a469-40a74522912e;exit=success\]3008;start=961590e6-de7b-4a0b-9068-be6544cc5913;machineid=5e91118635724e4ba187e0e1e063b8f2;user=kali;hostname=Elysia;bootid=405272f0-2b7d-4074-8dc7-a210347e0969;pid=00000000000000000340;type=shell;cwd=/home/kali\[?2004h[?25l[34m[1mCyberStrikeAI[m  [34m[1mgo[m  [34m[1mida_debug[m  [34m[1mstudyTest[32m[22m[13;1H┌──([34m[1mkali㉿Elysia[32m[22m)-[[m[1m~[32m[22m]
+└─[34m[1m$[m [?25h[32m└─[34m[1m$[m c[32m└─[34m[1m$[m [1Cd C*[?2004l
+]3008;start=7d92177e-fae2-471b-b9f5-f228d58f1edb;machineid=5e91118635724e4ba187e0e1e063b8f2;user=kali;hostname=Elysia;bootid=405272f0-2b7d-4074-8dc7-a210347e0969;pid=00000000000000000340;type=command;cwd=/home/kali\]3008;end=7d92177e-fae2-471b-b9f5-f228d58f1edb;exit=success\]3008;start=961590e6-de7b-4a0b-9068-be6544cc5913;machineid=5e91118635724e4ba187e0e1e063b8f2;user=kali;hostname=Elysia;bootid=405272f0-2b7d-4074-8dc7-a210347e0969;pid=00000000000000000340;type=shell;cwd=/home/kali/CyberStrikeAI\[?2004h[32m
+┌──([34m[1mkali㉿Elysia[32m[22m)-[[m[1m~/CyberStrikeAI[32m[22m]
+└─[34m[1m$[m ]0;kali@Elysia: ~/CyberStrikeAI[32m└─[34m[1m$[m l[32m└─[34m[1m$[m [1Cs[?2004l
+]3008;start=b42e2428-8604-4599-88a4-7743f501f379;machineid=5e91118635724e4ba187e0e1e063b8f2;user=kali;hostname=Elysia;bootid=405272f0-2b7d-4074-8dc7-a210347e0969;pid=00000000000000000340;type=command;cwd=/home/kali/CyberStrikeAI\]3008;end=b42e2428-8604-4599-88a4-7743f501f379;exit=success\]3008;start=961590e6-de7b-4a0b-9068-be6544cc5913;machineid=5e91118635724e4ba187e0e1e063b8f2;user=kali;hostname=Elysia;bootid=405272f0-2b7d-4074-8dc7-a210347e0969;pid=00000000000000000340;type=shell;cwd=/home/kali/CyberStrikeAI\[?2004h[?25l[34m[1magents[m[15X[32m[1m[15Ccyberstrike-ai[m  go.sum          LICENSE       README.md         SECURITY.md  [34m[1mvenv
+cmd[m[18X[34m[1m[18Cdata[m[12X[34m[1m[12Cimages[m[10X[34m[1m[10Cmcp-servers[m   requirements.txt  [34m[1mskills[m       [34m[1mweb[m
+config.example.yaml  [34m[1mdocs[m[12X[34m[1m[12Cinternal[m        [34m[1mplugins[m       [34m[1mroles[m[13X[34m[1m[13Ctools[m
+config.yaml          go.mod[10X[34m[1m[10Cknowledge_base[m  README_CN.md  [32m[1mrun.sh[m            upgrade.sh[32m[23;1H┌──([34m[1mkali㉿Elysia[32m[22m)-[[m[1m~/CyberStrikeAI[32m[22m]
+└─[34m[1m$[m [?25h[32m└─[34m[1m$[m c[32m└─[34m[1m$[m [1Ca[32m└─[34m[1m$[m [1C[K[32m└─[34m[1m$[m[K[1C[32m└─[34m[1m$[m m[32m└─[34m[1m$[m [1Core README.md[?2004l
+]3008;start=388c6ae5-f843-4c6c-9c22-41b8ef4d56a0;machineid=5e91118635724e4ba187e0e1e063b8f2;user=kali;hostname=Elysia;bootid=405272f0-2b7d-4074-8dc7-a210347e0969;pid=00000000000000000340;type=command;cwd=/home/kali/CyberStrikeAI\[?25l<div align="center">
+  <img src="images/logo.png" alt="CyberStrikeAI Logo" width="200" >
+</div>[29;1H# CyberStrikeAI
+[?25h
+
+[中文](README_CN.md) | [English](README.md)
+
+**The system of action for AI-native cybersecurity—where intent becomes governed execution, evidence becomes operational[30;1H
+ memory, and every operation improves the next.**
+
+CyberStrikeAI connects planning, execution, human oversight, evidence, and replay in one auditable workspace. Built in G[30;1H
+o, it combines Eino-powered agents, MCP-native tools, RAG knowledge, visual workflows, and attack-chain modeling and ana[30;1H
+lysis for authorized security operations.
+
+**Start here:** [Quick start](#quick-start-one-command-deployment) · [Documentation](docs/en-US/README.md) · [Security h[30;1H
+ardening](docs/en-US/security-hardening.md)
+
+> [!IMPORTANT]
+> Use CyberStrikeAI only on systems you own or are explicitly authorized to test. For shared or production environments,[30;1H
+ review the [security model](docs/en-US/security-model.md) and [hardening guide](docs/en-US/security-hardening.md) befor[30;1H
+e enabling high-risk tools, WebShell, or C2 capabilities.
+
+## Interface & Integration Preview
+
+<div align="center">
+
+### System Dashboard Overview
+[7m--More--(5%)[27m[K[K
+<table>
+<tr>
+<td width="50%" align="center">
+<strong>Light Mode</strong><br/>
+<img src="./images/dashboard.png" alt="System Dashboard (Light)" width="100%">
+</td>
+<td width="50%" align="center">
+<strong>Dark Mode</strong><br/>
+<img src="./images/dark.png" alt="System Dashboard (Dark)" width="100%">
+</td>
+</tr>
+</table>
+
+*The dashboard provides a comprehensive overview of system runtime status, security vulnerabilities, tool usage, and kno[30;1H
+wledge base, helping users quickly understand the platform's core features and current state.*
+
+<details>
+<summary><strong>More interface screenshots</strong></summary>
+
+### Core Features Overview
+
+<table>
+<tr>
+<td width="33.33%" align="center">
+<strong>Web Console</strong><br/>
+<img src="./images/web-console.png" alt="Web Console" width="100%">
+</td>
+<td width="33.33%" align="center">
+[7m--More--(9%)[27m[K<strong>Task Management</strong><br/>
+<img src="./images/task-management.png" alt="Task Management" width="100%">
+</td>
+<td width="33.33%" align="center">
+<strong>Vulnerability Management</strong><br/>
+<img src="./images/vulnerability-management.png" alt="Vulnerability Management" width="100%">
+</td>
+</tr>
+<tr>
+<td width="33.33%" align="center">
+<strong>WebShell Management</strong><br/>
+<img src="./images/webshell-management.png" alt="WebShell Management" width="100%">
+</td>
+<td width="33.33%" align="center">
+<strong>MCP Management</strong><br/>
+<img src="./images/mcp-management.png" alt="MCP management" width="100%">
+</td>
+<td width="33.33%" align="center">
+<strong>Knowledge Base</strong><br/>
+<img src="./images/knowledge-base.png" alt="Knowledge Base" width="100%">
+</td>
+</tr>
+<tr>
+<td width="33.33%" align="center">
+<strong>Skills Management</strong><br/>
+<img src="./images/skills.png" alt="Skills Management" width="100%">
+</td>
+<td width="33.33%" align="center">
+<strong>Agent Management</strong><br/>
+[7m--More--(14%)[27m[K[K]3008;end=388c6ae5-f843-4c6c-9c22-41b8ef4d56a0;exit=success\]3008;start=961590e6-de7b-4a0b-9068-be6544cc5913;machineid=5e91118635724e4ba187e0e1e063b8f2;user=kali;hostname=Elysia;bootid=405272f0-2b7d-4074-8dc7-a210347e0969;pid=00000000000000000340;type=shell;cwd=/home/kali/CyberStrikeAI\[?2004h
+[32m┌──([34m[1mkali㉿Elysia[32m[22m)-[[m[1m~/CyberStrikeAI[32m[22m][K[m
+[32m└─[34m[1m$[m[K[1C[32m└─[34m[1m$[m c[32m└─[34m[1m$[m [1Cla[32m└─[34m[1m$[m [2C[Kear[?2004l
+]3008;start=5512b721-f535-4677-8398-0f78cd802453;machineid=5e91118635724e4ba187e0e1e063b8f2;user=kali;hostname=Elysia;bootid=405272f0-2b7d-4074-8dc7-a210347e0969;pid=00000000000000000340;type=command;cwd=/home/kali/CyberStrikeAI\[?25l[H[?25h[2J[3J]3008;end=5512b721-f535-4677-8398-0f78cd802453;exit=success\]3008;start=961590e6-de7b-4a0b-9068-be6544cc5913;machineid=5e91118635724e4ba187e0e1e063b8f2;user=kali;hostname=Elysia;bootid=405272f0-2b7d-4074-8dc7-a210347e0969;pid=00000000000000000340;type=shell;cwd=/home/kali/CyberStrikeAI\[?2004h[?25l[K[32m
+┌──([34m[1mkali㉿Elysia[32m[22m)-[[m[1m~/CyberStrikeAI[32m[22m][K
+└─[34m[1m$[m[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K[3;5H[?25h[32m└─[34m[1m$[m c[32m└─[34m[1m$[m [1Cl[32m└─[34m[1m$[m [1C[K[32m└─[34m[1m$[m[K[1C[32m└─[34m[1m$[m l[32m└─[34m[1m$[m [1Cs
+[?2004l]3008;start=6d5cf809-7531-4b2e-8998-00527e445cc2;machineid=5e91118635724e4ba187e0e1e063b8f2;user=kali;hostname=Elysia;bootid=405272f0-2b7d-4074-8dc7-a210347e0969;pid=00000000000000000340;type=command;cwd=/home/kali/CyberStrikeAI\]3008;end=6d5cf809-7531-4b2e-8998-00527e445cc2;exit=success\]3008;start=961590e6-de7b-4a0b-9068-be6544cc5913;machineid=5e91118635724e4ba187e0e1e063b8f2;user=kali;hostname=Elysia;bootid=405272f0-2b7d-4074-8dc7-a210347e0969;pid=00000000000000000340;type=shell;cwd=/home/kali/CyberStrikeAI\[?2004h[?25l[34m[1magents[m[15X[32m[1m[15Ccyberstrike-ai[m  go.sum          LICENSE       README.md         SECURITY.md  [34m[1mvenv
+cmd[m[18X[34m[1m[18Cdata[m[12X[34m[1m[12Cimages[m[10X[34m[1m[10Cmcp-servers[m   requirements.txt  [34m[1mskills[m       [34m[1mweb[m
+config.example.yaml  [34m[1mdocs[m[12X[34m[1m[12Cinternal[m        [34m[1mplugins[m       [34m[1mroles[m[13X[34m[1m[13Ctools[m
+config.yaml          go.mod[10X[34m[1m[10Cknowledge_base[m  README_CN.md  [32m[1mrun.sh[m            upgrade.sh[32m[9;1H┌──([34m[1mkali㉿Elysia[32m[22m)-[[m[1m~/CyberStrikeAI[32m[22m]
+└─[34m[1m$[m [?25h[32m└─[34m[1m$[m m[32m└─[34m[1m$[m [1Core [7mREADME_CN.md[?2004l[?25l[27m[10;10HREADME_CN.md
+[?25h]3008;start=25f6fbf2-837c-4f4b-8618-a8c151eb631c;machineid=5e91118635724e4ba187e0e1e063b8f2;user=kali;hostname=Elysia;bootid=405272f0-2b7d-4074-8dc7-a210347e0969;pid=00000000000000000340;type=command;cwd=/home/kali/CyberStrikeAI\[?25l<div align="center">
+  <img src="images/logo.png" alt="CyberStrikeAI Logo" width="200">
+</div>[15;1H# CyberStrikeAI[17;1H[中文](README_CN.md) | [English](README.md)[19;1H**CyberStrikeAI 是 AI 原生网络安全的智能执行中枢——让意图转化为受治理的行动，让证据沉淀为运营记忆，并让每次行动优化下一次
+行动。**[22;1HCyberStrikeAI 将规划、执行、人工监督、证据与复盘连接在同一个可审计工作空间中。项目基于 Go 构建，融合 Eino 智能体、MCP 原
+生工具、RAG 知识、可视化工作流以及攻击链建模与分析能力，面向已获得明确授权的安全任务。[25;1H**从这里开始：** [快速上手](#快速上手一条命令部署) · [中文文档](docs/zh-CN/README.md) · [安全加固](docs/zh-CN/security-h
+ardening.md)[28;1H> [!IMPORTANT]
+> 仅可对自有系统或已获得明确授权的目标使用 CyberStrikeAI。在共享或生产环境启用高风险工具、WebShell 或 C2 前，请先阅读[安
+全模型](docs/zh-CN/security-model.md)和[安全加固指南](docs/zh-CN/security-hardening.md)。[?25h
+
+## 界面与集成预览
+
+<div align="center">
+
+### 系统仪表盘概览
+
+<table>
+<tr>
+[7m--More--(6%)[27m[K<td width="50%" align="center">
+<strong>浅色模式</strong><br/>
+<img src="./images/dashboard.png" alt="系统仪表盘（浅色）" width="100%">
+</td>
+<td width="50%" align="center">
+<strong>深色模式</strong><br/>
+<img src="./images/dark.png" alt="系统仪表盘（深色）" width="100%">
+</td>
+</tr>
+</table>
+
+*仪表盘提供系统运行状态、安全漏洞、工具使用情况和知识库的全面概览，帮助用户快速了解平台核心功能和当前状态。*
+
+<details>
+<summary><strong>查看更多界面截图</strong></summary>
+
+### 核心功能概览
+
+<table>
+<tr>
+<td width="33.33%" align="center">
+<strong>Web 控制台</strong><br/>
+<img src="./images/web-console.png" alt="Web 控制台" width="100%">
+</td>
+<td width="33.33%" align="center">
+<strong>任务管理</strong><br/>
+<img src="./images/task-management.png" alt="任务管理" width="100%">
+</td>
+<td width="33.33%" align="center">
+[7m--More--(10%)[27m[K<strong>漏洞管理</strong><br/>
+<img src="./images/vulnerability-management.png" alt="漏洞管理" width="100%">
+</td>
+</tr>
+<tr>
+<td width="33.33%" align="center">
+<strong>WebShell 管理</strong><br/>
+<img src="./images/webshell-management.png" alt="WebShell 管理" width="100%">
+</td>
+<td width="33.33%" align="center">
+<strong>MCP 管理</strong><br/>
+<img src="./images/mcp-management.png" alt="MCP 管理" width="100%">
+</td>
+<td width="33.33%" align="center">
+<strong>知识库</strong><br/>
+<img src="./images/knowledge-base.png" alt="知识库" width="100%">
+</td>
+</tr>
+<tr>
+<td width="33.33%" align="center">
+<strong>Skills 管理</strong><br/>
+<img src="./images/skills.png" alt="Skills 管理" width="100%">
+</td>
+<td width="33.33%" align="center">
+<strong>Agent 管理</strong><br/>
+<img src="./images/agent-management.png" alt="Agent 管理" width="100%">
+</td>
+<td width="33.33%" align="center">
+<strong>角色管理</strong><br/>
+[7m--More--(15%)[27m[K<img src="./images/role-management.png" alt="角色管理" width="100%">
+</td>
+</tr>
+<tr>
+<td width="33.33%" align="center">
+<strong>系统设置</strong><br/>
+<img src="./images/settings.png" alt="系统设置" width="100%">
+</td>
+<td width="33.33%" align="center">
+<strong>MCP stdio 模式</strong><br/>
+<img src="./images/mcp-stdio2.png" alt="MCP stdio 模式" width="100%">
+</td>
+<td width="33.33%" align="center">
+<strong>Burp Suite 插件</strong><br/>
+<img src="./images/plugins.png" alt="Burp Suite 插件" width="100%">
+</td>
+</tr>
+</table>
+
+</details>
+
+</div>
+
+## 特性速览
+
+### 智能体与编排
+
+- 🤖 **智能体执行层**：将自然语言意图转化为受控、可审计的安全行动。
+- 🧩 **Eino 编排**：支持单智能体及 Deep、Plan-Execute、Supervisor 多智能体模式。
+[7m--More--(20%)[27m[K- 🔀 **工作流**：通过 Agent、工具、条件、审批和输出节点构建可复用流程。
+- 🎭 **角色化测试**：为常见安全场景提供聚焦的提示词和工具策略。
+
+### 工具与知识扩展
+
+- 🧰 **安全工具**：提供 100+ 精选 YAML 工具配方，支持自定义扩展和按角色控制。
+- 🔌 **MCP 集成**：支持 HTTP、stdio、SSE、外部 MCP 联邦和动态工具发现。
+- ⏱️ **弹性工具执行**：阻塞型 MCP/工具调用交给 worker 执行，Agent 只有限等待；支持 `execution_id` 多轮等待、主动取消、单
+[29;119H单
+
+server 熔断、并发限制和统一输出兜底。
+- 🎯 **Agent Skills**：遵循标准 Skill 目录结构，支持渐进式按需加载。
+- 📚 **知识库**：组合查询改写、向量检索、精排和结果后处理能力。
+- 🖼️ **视觉分析**：使用独立视觉模型分析截图、验证码和 UI，对话中仅保留文字摘要。
+
+### 安全治理与审计
+
+- 🧑‍⚖️ **人机协同**：支持审批模式、工具白名单、审计 Agent 复核和决策追踪。
+- 🔐 **平台 RBAC**：支持多用户、系统及自定义角色、权限 Scope、资源归属和显式授权。
+- 🔒 **安全与审计**：提供登录保护、审计日志、SQLite 持久化和行动证据留存。
+- 📄 **结果治理**：数据库保存与 Agent 实际看到的同一份兜底后工具结果，恢复路径会再次防御历史超大输出，前端详情也有展示保[30;1H
+护。详见[工具执行治理](docs/zh-CN/tool-execution-governance.md)。
+
+### 安全运营管理
+
+- 📁 **对话管理**：支持分组、置顶、重命名和批量管理。
+- 📂 **项目与攻击链**：关联跨会话事实、风险评分、图谱视图和步骤回放。
+- 🗂️ **资产管理**：统一归档和去重域名、IP、端口与服务，支持 XLSX/CSV 导入导出、高级筛选与保存视图、责任和业务属性、跨页 
+[29;120H 批
+量维护、重复资产合并，并跟踪扫描覆盖、关联漏洞和风险状态。详见[资产管理指南](docs/zh-CN/asset-management.md)。
+- 🛡️ **漏洞管理**：支持严重程度分级、状态流转、过滤和统计看板。
+- 📋 **批量任务**：支持任务队列、编辑、状态跟踪和结果留存。
+[7m--More--(31%)[27m[K- 📱 **机器人接入**：支持个人微信、企业微信、钉钉、飞书、Telegram、Slack、Discord 和 QQ。
+
+### 授权安全操作
+
+- 🐚 **WebShell 管理**：提供连接管理、虚拟终端、文件操作和 AI 辅助工作流。
+- 📡 **内置 C2**：提供监听器、加密 Beacon、会话、任务队列、Payload 辅助和实时事件。
+
+> WebShell、C2 及其他高风险能力仅限自有系统或已获得明确授权的测试环境。使用前请阅读[安全模型](docs/zh-CN/security-model.[30;1H
+md)和[安全加固指南](docs/zh-CN/security-hardening.md)。
+
+## 插件（Plugins）
+
+可选集成在 `plugins/` 目录下。
+
+- **Burp Suite 插件**：`plugins/burp-suite/cyberstrikeai-burp-extension/`
+  构建产物：`plugins/burp-suite/cyberstrikeai-burp-extension/dist/cyberstrikeai-burp-extension.jar`
+  说明文档：`plugins/burp-suite/cyberstrikeai-burp-extension/README.zh-CN.md`
+- **浏览器扩展（Chrome / Edge）**：`plugins/browser-extension/cyberstrikeai-browser-extension/`  
+  在 DevTools 中捕获 Network 流量并发送到 CyberStrikeAI 进行 AI 辅助安全测试，能力与 Burp 插件对齐。
+  安装：`chrome://extensions/` → 加载已解压 → F12 → **CyberStrikeAI** 标签页
+  打包产物：`plugins/browser-extension/cyberstrikeai-browser-extension/dist/cyberstrikeai-browser-extension.zip`        
+  说明文档：`plugins/browser-extension/cyberstrikeai-browser-extension/README.zh-CN.md`
+
+## 工具概览
+
+系统预置 100+ 渗透/攻防工具，覆盖完整攻击链：
+
+<details>
+<summary><strong>查看完整工具分类</strong></summary>
+[7m--More--(40%)[27m[K[K
+- **网络扫描**：nmap、masscan、rustscan、arp-scan、nbtscan
+- **Web 应用扫描**：sqlmap、nikto、dirb、gobuster、feroxbuster、ffuf、httpx
+- **漏洞扫描**：nuclei、wpscan、wafw00f、dalfox、xsser
+- **子域名枚举**：subfinder、amass、findomain、dnsenum、fierce
+- **网络空间搜索引擎**：fofa_search、zoomeye_search、quake_search、shodan_search
+- **API 安全**：graphql-scanner、arjun、api-fuzzer、api-schema-analyzer
+- **容器安全**：trivy、clair、docker-bench-security、kube-bench、kube-hunter
+- **云安全**：prowler、scout-suite、cloudmapper、pacu、terrascan、checkov
+- **二进制分析**：gdb、radare2、ghidra、objdump、strings、binwalk
+- **漏洞利用**：metasploit、msfvenom、pwntools、ropper、ropgadget
+- **密码破解**：hashcat、john、hashpump
+- **取证分析**：volatility、volatility3、foremost、steghide、exiftool
+- **后渗透**：linpeas、winpeas、mimikatz、bloodhound、impacket、responder
+- **CTF 实用工具**：stegsolve、zsteg、hash-identifier、fcrackzip、pdfcrack、cyberchef
+- **系统辅助**：exec、create-file、delete-file、list-files、modify-file
+
+</details>
+
+工具定义、自定义方式与使用说明见 [tools/README.md](tools/README.md)。
+
+## 基础使用
+
+### 快速上手（一条命令部署）
+
+**环境要求：**
+- Go 1.25+（[下载安装](https://go.dev/dl/)，以 `go.mod` 为准）
+- Python 3.10+ ([下载安装](https://www.python.org/downloads/))
+
+[7m--More--(48%)[27m[K**一条命令部署：**
+```bash
+git clone https://github.com/Ed1s0nZ/CyberStrikeAI.git
+cd CyberStrikeAI
+chmod +x run.sh && ./run.sh
+```
+
+`run.sh` 脚本会自动完成：
+- ✅ 检查并验证 Go 和 Python 环境
+- ✅ 创建 Python 虚拟环境
+- ✅ 安装 Python 依赖包
+- ✅ 下载 Go 依赖模块
+- ✅ 编译构建项目
+- ✅ 启动服务器
+
+**验证是否启动成功：**
+
+1. 确认终端显示 `● ONLINE`，并在其后给出实际 Web UI 地址。
+2. 打开该地址；默认 HTTPS 使用本地自签证书，首次访问需接受一次浏览器证书提示。
+3. 全新安装时，妥善保存 `ADMIN SETUP REQUIRED` 下仅展示一次的 `admin` 密码，登录后立即修改。
+
+**网络默认：** `run.sh` 会以 **`--https`** 并传入项目根 **`config.yaml`** 启动（本机自签证书，多路流式场景更稳）。只要明[30;1H
+文 HTTP 用 **`./run.sh --http`**。生产环境在 **`config.yaml`** 的 **`server.tls_cert_path` / `server.tls_key_path`** 配 [30;1H
+正式证书（见文件内注释）。手动启动可加 **`--https`** 或环境变量 **`CYBERSTRIKE_HTTPS=1`**；`-config` 写错时程序会在终端 [30;1H
+提示正确写法。
+
+**首次配置：**
+1. **配置 AI 通道**（首次使用前必填）
+   - 启动后在浏览器打开 **`https://127.0.0.1:8080/`**（或 **`https://localhost:8080/`**；端口以 `config.yaml` 中 **`serv[30;1H
+[7m--More--(55%)[27m[K[K]3008;end=25f6fbf2-837c-4f4b-8618-a8c151eb631c;exit=success\]3008;start=961590e6-de7b-4a0b-9068-be6544cc5913;machineid=5e91118635724e4ba187e0e1e063b8f2;user=kali;hostname=Elysia;bootid=405272f0-2b7d-4074-8dc7-a210347e0969;pid=00000000000000000340;type=shell;cwd=/home/kali/CyberStrikeAI\[?2004h
+[32m┌──([34m[1mkali㉿Elysia[32m[22m)-[[m[1m~/CyberStrikeAI[32m[22m][K[m
+[32m└─[34m[1m$[m[K[1C[7m./run.sh[?25l[27m[30;5H./run.sh[?25h[1C[?2004l
+]3008;start=5f6155dc-1983-4898-bcdf-913387371734;machineid=5e91118635724e4ba187e0e1e063b8f2;user=kali;hostname=Elysia;bootid=405272f0-2b7d-4074-8dc7-a210347e0969;pid=00000000000000000340;type=command;cwd=/home/kali/CyberStrikeAI\
+==========================================
+  CyberStrikeAI Deploy & Start Script
+  (HTTPS with self-signed cert by default; plain HTTP: ./run.sh --http)
+==========================================
+
+
+[33m[1m⚠️  Note: this script uses temporary mirrors to speed up downloads[m
+
+[34mℹ️  Python pip temporary mirror:[m
+  https://pypi.tuna.tsinghua.edu.cn/simple
+[34mℹ️  Go temporary proxy:[m
+  https://goproxy.cn,direct
+
+[36mℹ️  These settings apply only while this script runs and do not change system config[m
+
+[34mℹ️  Checking runtime environment...[m
+[32m✅ Python check passed: 3.13.14[m
+[32m✅ Go check passed: go version go1.26.3 linux/amd64[m
+
+[34mℹ️  Setting up Python environment...[m
+[34mℹ️  Python virtual environment already exists[m
+[34mℹ️  Activating virtual environment...[m
+
+[36mℹ️  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[m
+[36mℹ️  Using temporary pip mirror (this script run only)[m
+[36mℹ️     Mirror URL: https://pypi.tuna.tsinghua.edu.cn/simple[m
+[36mℹ️     For a permanent setting, set the PIP_INDEX_URL env var[m
+[36mℹ️  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[m
+
+[34mℹ️  Upgrading pip...[m
+[34mℹ️  Installing Python dependencies...[m
+
+[34m⏳ Installing dependencies..[m[32m✅ Python dependencies installed[m
+
+[32m✅ Binary is up to date; skipping build[m
+
+[32m✅ All setup complete![m
+
+[34mℹ️  Starting CyberStrikeAI server (HTTPS + HTTP/2, self-signed cert)...[m
+[36mℹ️  For plain HTTP, use: ./run.sh --http[m
+==========================================
+
+
+[36m[1mCYBERSTRIKE AI[m[2m  /  secure workspace[22m[K
+[2m────────────────────────────────────────────────────────────[22m[K
+[32m● ONLINE   [97m[1mhttps://127.0.0.1:8080/[m[K
+[2m  TLS      [33m[22mself-signed[m[2m · accept the browser warning once[22m[K
+[2m  Redirect [22mhttp://127.0.0.1:8080/ → HTTPS[K
+
+^C{"level":"info","timestamp":"2026-09-12T11:35:36.095+0800","caller":"server/main.go:123","msg":"收到系统信号，开始优雅
+[29;119H雅关闭: interrupt"}
+{"level":"info","timestamp":"2026-09-12T11:35:36.100+0800","caller":"app/c2_lifecycle.go:102","msg":"C2 子系统已关闭"}  
+]3008;end=5f6155dc-1983-4898-bcdf-913387371734;exit=success\]3008;start=961590e6-de7b-4a0b-9068-be6544cc5913;machineid=5e91118635724e4ba187e0e1e063b8f2;user=kali;hostname=Elysia;bootid=405272f0-2b7d-4074-8dc7-a210347e0969;pid=00000000000000000340;type=shell;cwd=/home/kali/CyberStrikeAI\[?2004h
+[32m┌──([34m[1mkali㉿Elysia[32m[22m)-[[m[1m~/CyberStrikeAI[32m[22m][K[m
+[32m└─[34m[1m$[m[K[1C2026-09-12 11:37:15 [SYS] 下线: 客户端主动下线
