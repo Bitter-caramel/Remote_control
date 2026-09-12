@@ -1,14 +1,3 @@
----
-AIGC:
-    Label: "1"
-    ContentProducer: 001191440300708461136T1XGW3
-    ProduceID: 91a6ec231204528cf058fec04d8653c4_605832a4ae9111f188ac525400dcc5b3
-    ReservedCode1: E+QRbr1a4yVZR3bkd6ayKH+AN3p2tUcezwD4SAeKPyqtGXjanebsizIW6DkhNBs3Ay/r+ab4err9y/HWIq9GLKm/fOtPOtA48nQ1PYp0kSh+fnd0cUgpHi34NOzaNbsAoqPWaHAli+cJchchpnUnTUML4YZZx/ep5lOtnHXGD29ICLj85Ftdz1ABzpk=
-    ContentPropagator: 001191440300708461136T1XGW3
-    PropagateID: 91a6ec231204528cf058fec04d8653c4_605832a4ae9111f188ac525400dcc5b3
-    ReservedCode2: E+QRbr1a4yVZR3bkd6ayKH+AN3p2tUcezwD4SAeKPyqtGXjanebsizIW6DkhNBs3Ay/r+ab4err9y/HWIq9GLKm/fOtPOtA48nQ1PYp0kSh+fnd0cUgpHi34NOzaNbsAoqPWaHAli+cJchchpnUnTUML4YZZx/ep5lOtnHXGD29ICLj85Ftdz1ABzpk=
----
-
 # Remote_control —— 反向 Shell 远程协助系统（Go 语言实现）
 
 > ## ⚠️ 免责声明（请务必先读）
@@ -586,4 +575,3 @@ A：关闭 `user.exe` / `helper.exe` 进程，删除程序文件、`config.json`
 
 **再次郑重声明：本项目仅供学习研究使用，严禁用于任何非法用途。**
 使用者须自行确保其行为符合所在国家 / 地区的法律法规，并对自己的一切行为承担全部责任。
-*（内容由AI生成，仅供参考）*
