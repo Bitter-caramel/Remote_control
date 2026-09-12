@@ -14,7 +14,7 @@ type Config struct {
 
 // defaultServerAddr 协助者服务器的地址，发布前提前写入。
 // 首次生成 config 文件时写入，之后可在 config.json 中直接修改。
-const defaultServerAddr = "10.158.128.48:8080"
+const defaultServerAddr = "127.0.0.1:8080"
 
 const configPath = "config.json"
 
