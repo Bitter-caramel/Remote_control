@@ -4,14 +4,16 @@
 # ============================================================
 
 # ---------- 1. 编译产物：不上传 ----------
-# 由 生成exe.bat / 生成dll.bat 生成，属本机构建结果，不入库
+# 所有构建脚本统一输出到仓库根目录 bin/
+bin/
+# 兼容：散落在外的编译产物也不入库
 *.exe
 *.dll
 *.so
 *.dylib
 *.a
 *.o
-# 由 生成linux.bat 交叉编译生成（Linux 无扩展名可执行文件，如 helper_linux_amd64）
+# 交叉编译生成（Linux 无扩展名可执行文件，如 helper_linux_amd64）
 *_linux_amd64
 *_linux_arm64
 
@@ -19,8 +21,10 @@
 # 含 program.log / bots.log / botlogs/<botID>.log 等终端录像，属运行期本地数据
 *.log
 logs/
+# 本地 CLI/Agent 接入点文件（含随机令牌），无论出现在哪都不入库
+**/agent_endpoint.json
 
 # ---------- 3. 本地配置与身份信息：不上传 ----------
-# user/config.json 由被控端首次运行自动生成，
-# 内含协助者服务器地址与本机唯一身份 user_id，属本地私有信息
-user/config.json
+# user 端首次运行在【运行目录】下自动生成 config.json，
+# 内含协助者服务器地址、本机唯一身份 user_id、自定义名称 name，属本地私有信息
+config.json

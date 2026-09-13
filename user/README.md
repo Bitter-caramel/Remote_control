@@ -15,37 +15,45 @@
 
 ```
 user/
-├── go.mod                      # 本端独立 module: remoteassist-user
-├── go.sum
-├── main.go                     # 入口：读/建 config → 主动连接协助者 → 注册身份 → 心跳 → 转发终端
-├── config.go                   # config.json 管理（保存 userID 与协助者服务器地址）
-├── conn.go                     # 连接管理：建立 WebSocket、注册、断线重连、下线通知、消息收发
-├── shell.go                    # 常驻交互式 shell 管理：惰性启动、退出自动重启、输出泵送
-├── shell_windows.go            # Windows：ConPTY 伪终端（旧系统自动降级为管道 shell）
-├── shell_other.go              # 非 Windows 平台的 shell 实现（开发自测用）
-├── console_windows.go          # Windows 控制台 UTF-8 代码页设置
-├── console_other.go            # 非 Windows 平台空实现
-├── heartbeat.go                # 周期向协助者发送心跳（仅保活，不记录任何内容）
+├── go.mod / go.sum             # 本端独立 module: remoteassist-user
+├── cmd/user/main.go            # 薄入口，仅调用 internal/agent.Run()
+├── internal/agent/             # 全部业务逻辑（package agent）
+│   ├── main.go                 #   读/建 config → 主动连接 → 注册 → 心跳 → 转发终端
+│   ├── config.go               #   config.json：server_addr / user_id / name
+│   ├── conn.go                 #   建立 WebSocket、注册（上报系统与名称）、断线重连、消息收发
+│   ├── sysinfo.go              #   系统信息探测（公共）
+│   ├── sysinfo_windows.go      #   Windows：版本号（主.次.构建号）
+│   ├── sysinfo_other.go        #   Linux：/etc/os-release + 内核版本；其它平台仅 goos/goarch
+│   ├── agentexec.go            #   Agent 一次性命令执行（独立 shell，不碰交互终端）
+│   ├── shell.go                #   常驻交互式 shell 管理：惰性启动、退出自动重启、输出泵送
+│   ├── shell_windows.go        #   Windows：ConPTY 伪终端（旧系统自动降级为管道 shell）
+│   ├── shell_other.go          #   非 Windows 平台的 shell 实现（开发自测用）
+│   ├── console_*.go            #   UTF-8 代码页（Windows）/ 空实现
+│   └── heartbeat.go            #   周期心跳
 └── protocol/
-    └── message.go              # 与协助者端共用的消息协议（JSON，终端字节流用 base64 承载）
+    └── message.go              # 与协助者端共用的消息协议（JSON，字节流用 base64 承载）
 ```
 
-运行时会在当前目录生成 `config.json`：
+编译产物统一输出到仓库根目录 `../bin/`；构建脚本在仓库根目录 `scripts/`。
+
+运行时会在**当前工作目录**生成 `config.json`：
 
 ```json
 {
   "server_addr": "协助者的IP:端口",
-  "user_id": ""
+  "user_id": "",
+  "name": ""
 }
 ```
 
-`user_id` 在首次连接成功后由协助者端自动分配并写入，之后固定不变，用于识别你的机器。
+- `user_id` 在首次连接成功后由协助者端自动分配并写入，之后固定不变；
+- `name` 是**本机自定义名称**（如"财务室-电脑"），可随时自行填写，协助端会显示；留空则只显示 botID。
 
 ---
 
 ## 二、如何编译
 
-本端是一个独立的 Go module，无需依赖其它目录。
+本端是一个独立的 Go module，入口包在 `cmd/user`。
 
 ### 前置要求
 
@@ -53,18 +61,23 @@ user/
 
 ### 编译为 exe（Windows）
 
-在 `user/` 目录下执行：
+推荐双击仓库根目录的 `scripts/build-user-windows.bat`（产物在 `bin/user.exe`）。手动编译：
 
 ```powershell
-go build -o user.exe .
+cd user
+go build -o ..\bin\user.exe ./cmd/user
 ```
 
-即可生成 `user.exe`，把它和（可选的）`config.json` 一起发给被协助方即可。
+把 `bin/user.exe` 发给被协助方即可。
+
+### 编译 Linux 版（被控机是 CentOS 等时）
+
+双击 `scripts/build-user-linux-amd64.bat`（纯静态，产物 `bin/user_linux_amd64`）。
 
 ### 编译时隐藏控制台窗口（可选，后台静默运行）
 
 ```powershell
-go build -ldflags="-H windowsgui" -o user.exe .
+go build -ldflags="-H windowsgui" -o ..\bin\user.exe ./cmd/user
 ```
 
 > ⚠️ 隐藏窗口后程序在后台静默运行，被协助方看不到任何界面，也无法通过关窗口退出，
@@ -73,7 +86,8 @@ go build -ldflags="-H windowsgui" -o user.exe .
 ### 交叉编译（在非 Windows 机器上编译 Windows exe）
 
 ```bash
-GOOS=windows GOARCH=amd64 go build -o user.exe .
+cd user
+GOOS=windows GOARCH=amd64 go build -o user.exe ./cmd/user
 ```
 
 ---
@@ -82,13 +96,14 @@ GOOS=windows GOARCH=amd64 go build -o user.exe .
 
 ### 1. 配置协助者地址
 
-把 `user.exe` 放到任意目录，**首次运行**会自动生成 `config.json`，
-用记事本打开它，把 `server_addr` 改成协助者告诉你的地址：
+把 `user.exe`（Linux 上是 `user_linux_amd64`）放到任意目录，**首次运行**会自动生成 `config.json`，
+用记事本打开它，把 `server_addr` 改成协助者告诉你的地址，并可选填写 `name`：
 
 ```json
 {
   "server_addr": "192.168.1.100:8080",
-  "user_id": ""
+  "user_id": "",
+  "name": "财务室-电脑"
 }
 ```
 

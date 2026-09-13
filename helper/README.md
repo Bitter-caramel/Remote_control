@@ -14,35 +14,40 @@
 
 ```
 helper/
-├── go.mod                      # 本端独立 module: remoteassist-helper
-├── go.sum
-├── main.go                     # 入口：初始化日志 → 启动管理器 → 启动心跳检测(后台) → 启动监听(后台) → 启动控制面板(前台)
-├── bot.go                      # BOT 对象：ID/IP/Port/WebSocket连接/心跳丢失计数/终端输出流/专属日志
-├── manager.go                  # bots 管理器：bots 列表 + 缓存区列表、botID 分配、上线/下线
-├── listener.go                 # TCP 监听 → WebSocket 升级，每个连接(每台机器)一个独立协程
-├── heartbeat.go                # 心跳检测：1 周期未收到心跳进缓存区，3 周期未收到销毁下线
-├── panel.go                    # 主控制面板：log / bots / exit 等命令解析
-├── panel_bot.go                # 内嵌终端（仅非 Windows 或弹窗失败时的降级方式）
-├── attachserver.go             # 本地 IPC 服务：终端窗口接入、令牌鉴权、输入输出桥接
-├── attach_client.go            # -attach 模式：新 DOS 窗口中运行的专属终端进程
-├── attach_window_windows.go    # Windows：cmd /c start 弹出独立终端窗口
-├── attach_window_other.go      # 非 Windows 平台：返回不支持，回退内嵌
-├── console_windows.go          # Windows 控制台：UTF-8 代码页、VT 输入/输出 raw 模式、窗口尺寸
-├── console_other.go            # 非 Windows 平台的空实现
-├── e2e_test.go                 # 端到端回归测试
+├── go.mod / go.sum             # 本端独立 module: remoteassist-helper
+├── cmd/helper/main.go          # 薄入口，仅调用 internal/app.Run()
+├── internal/app/               # 全部业务逻辑（package app）
+│   ├── main.go                 #   入口：-attach/-cli 分流 → 日志 → 心跳 → 同步绑定监听 → 控制面板
+│   ├── bot.go                  #   BOT 对象：ID/名称/系统/IP/Port/WebSocket/心跳/输出流/专属日志
+│   ├── manager.go              #   bots 管理器：在线列表 + 缓存区列表、botID 分配、上下线
+│   ├── listener.go             #   TCP 监听 → WebSocket 升级，每台机器一个独立协程
+│   ├── heartbeat.go            #   心跳检测：1 周期未收到心跳进缓存区，3 周期销毁下线
+│   ├── panel.go                #   主控制面板：log / bots / bot / exit
+│   ├── panel_bot.go            #   内嵌终端（仅非 Windows 或弹窗失败时的降级方式）
+│   ├── attachserver.go         #   本地 IPC：终端窗口接入、令牌鉴权、输入输出桥接
+│   ├── cliserver.go            #   本地 IPC 的 /cli 端点：Agent/脚本查询列表、执行一次性命令
+│   ├── execwait.go             #   exec 待回包注册表 + bot 摘要（含名称/系统）
+│   ├── agentcli.go             #   -cli 模式：list/exec 机器可读命令行
+│   ├── attach_client.go        #   -attach 模式：新 DOS 窗口中运行的专属终端进程
+│   ├── attach_window_*.go      #   Windows 弹窗 / 非 Windows 降级
+│   ├── console_*.go            #   Windows VT raw 模式 / 非 Windows 空实现
+│   └── e2e_test.go             #   端到端回归测试
 ├── protocol/
-│   └── message.go              # 与用户端共用的消息协议（JSON，终端字节流用 base64 承载）
+│   └── message.go              # 与用户端共用的消息协议（JSON，字节流用 base64 承载）
 └── logx/
-    ├── logx.go                 # programlog（程序运行日志）+ botslog（所有连接过的主机记录）
-    └── botlog.go               # botlog：每台机器一个专属日志（完整终端录像 + 连接事件）
+    ├── logx.go                 # programlog + botslog（含名称/系统列）
+    └── botlog.go               # 每台机器一个专属日志（终端录像 + [AGENT] 审计行）
 ```
 
-运行时会在当前目录生成 `logs/` 目录：
+编译产物统一输出到仓库根目录 `../bin/`；构建脚本在仓库根目录 `scripts/`。
+
+运行时会在**进程当前工作目录**生成 `logs/`：
 
 ```
 logs/
 ├── program.log                 # 程序运行日志（正确 + 错误）
-├── bots.log                    # 所有连接过的主机，及对应 botlog 文件名
+├── agent_endpoint.json         # 本地 CLI/Agent 接入点（地址 + 随机令牌），退出时删除
+├── bots.log                    # 所有连接过的主机：时间 | botID | 名称 | 系统 | 地址 | botlog
 └── botlogs/
     └── <botID>.log             # 每台机器的专属日志（命令 + 回显，心跳不写入）
 ```
@@ -51,7 +56,7 @@ logs/
 
 ## 二、编译方式
 
-本端是一个独立的 Go module，无需依赖其它目录。
+本端是一个独立的 Go module，入口包在 `cmd/helper`。
 
 ### 前置要求
 
@@ -59,24 +64,28 @@ logs/
 
 ### 编译为 exe（Windows）
 
-在 `helper/` 目录下执行：
+推荐直接双击仓库根目录的 `scripts/build-helper-windows.bat`（产物在 `bin/helper.exe`）。
+手动编译：
 
 ```powershell
-go build -o helper.exe .
+cd helper
+go build -o ..\bin\helper.exe ./cmd/helper
 ```
 
-即可生成 `helper.exe`。
+### 跨平台编译（在 Windows 上编译 Linux 版本，纯静态无需 gcc）
 
-### 跨平台编译（在 Windows 上编译 Linux 版本）
+双击 `scripts/build-helper-linux-amd64.bat`，或手动：
 
 ```powershell
-$env:GOOS="linux"; $env:GOARCH="amd64"; go build -o helper . ; $env:GOOS=""; $env:GOARCH=""
+$env:GOOS="linux"; $env:GOARCH="amd64"; $env:CGO_ENABLED="0"
+go build -o ..\bin\helper_linux_amd64 ./cmd/helper
+$env:GOOS=$null; $env:GOARCH=$null; $env:CGO_ENABLED=$null
 ```
 
 ### 编译时关闭控制台窗口（可选，纯后台运行）
 
 ```powershell
-go build -ldflags="-H windowsgui" -o helper.exe .
+go build -ldflags="-H windowsgui" -o ..\bin\helper.exe ./cmd/helper
 ```
 
 > 不推荐日常使用此选项，因为控制面板依赖控制台输入；关闭窗口后将无法输入命令。
@@ -135,10 +144,10 @@ const (
 
 ### 启动
 
-双击 `helper.exe`，或在终端运行：
+双击 `bin\helper.exe`，或在终端运行：
 
 ```powershell
-.\helper.exe
+.\bin\helper.exe
 ```
 
 你会看到 `assist> ` 提示符，此时程序已在后台监听 8080 端口。
@@ -188,7 +197,18 @@ assist> help
    - 同一台机器同时只能开一个终端窗口（防止输入抢占）；
    - 机器下线时窗口会提示并等待回车，不会闪退。
 
-3. **查看某台机器的历史操作记录**（botlog 是完整终端录像）：
+3. **给 Agent / 自动化脚本使用的 CLI 模式**（主程序保持运行，另开终端执行）：
+   ```
+   helper.exe -cli list --json
+   helper.exe -cli exec B4aeddecf 'ipconfig /all' --json
+   ```
+   - `list` 返回在线机器（JSON），`exec` 在指定机器执行**一次性命令**并返回输出与退出码；
+   - 一次性命令在被控端独立 shell 进程执行，**与交互终端窗口互不干扰**、无目录状态保持；
+   - 退出码透传远端命令；本地/协议错误退出码为 2；`--timeout` 默认 120 秒、上限 600 秒；
+   - 所有 `-cli exec` 都会写入该 bot 的 botlog（`[AGENT]` 审计行）；
+   - 完整的机器对接说明、JSON 契约与安全红线见 **`../Agent/README.md`**。
+
+4. **查看某台机器的历史操作记录**（botlog 是完整终端录像）：
    ```
    assist> log --botlog+B4aeddecf
    2026-09-11 21:28:14 [SYS] 上线 192.168.1.100:54321
@@ -197,9 +217,11 @@ assist> help
    desktop-xxxx\user
    C:\Users\用户名>_
    2026-09-11 21:35:10 [SYS] 终端面板脱离
+   2026-09-13 10:02:11 [AGENT] CMD > ipconfig /all
+   2026-09-13 10:02:11 [AGENT] OUT < exit=0 ...（输出）
    ```
 
-4. **退出程序**：
+5. **退出程序**：
    ```
    assist> exit
    程序已退出。

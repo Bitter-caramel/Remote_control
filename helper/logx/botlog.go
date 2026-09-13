@@ -3,6 +3,7 @@ package logx
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -36,6 +37,18 @@ func (b *BotLog) write(line string) {
 // 因此直接原样写入 botlog 即可完整留存"执行过的命令和对应回显"。
 func (b *BotLog) WriteTranscript(p []byte) {
 	b.f.Write(p)
+}
+
+// AgentCmd 记录 Agent/CLI 通道执行的一次性命令
+func (b *BotLog) AgentCmd(cmd string) { b.write("[AGENT] CMD > " + cmd) }
+
+// AgentOut 记录 Agent/CLI 命令的输出与退出码
+func (b *BotLog) AgentOut(out string, code int) {
+	body := strings.TrimRight(out, "\r\n")
+	if body == "" {
+		body = "(无输出)"
+	}
+	b.write(fmt.Sprintf("[AGENT] OUT < exit=%d %s", code, body))
 }
 
 // Close 关闭日志文件
