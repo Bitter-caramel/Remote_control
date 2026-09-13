@@ -11,6 +11,9 @@
 *.dylib
 *.a
 *.o
+# 由 生成linux.bat 交叉编译生成（Linux 无扩展名可执行文件，如 helper_linux_amd64）
+*_linux_amd64
+*_linux_arm64
 
 # ---------- 2. 日志：不上传 ----------
 # 含 program.log / bots.log / botlogs/<botID>.log 等终端录像，属运行期本地数据
