@@ -191,64 +191,71 @@ Go 程序（两个独立 Go module）组成：
 ```
 Remote_control/
 ├── README.md                     # 本文件：项目总览、编译、配置、使用说明与免责声明
-├── .gitignore                    # 忽略 *.exe、config.json、*.log
-├── helper.md                     # 操控端早期设计笔记（面向对象 / 连接 / 心跳 / 日志 / 面板）
-├── user.md                       # 被控端早期设计笔记（身份识别 / 权限模型）
+├── .gitignore                    # 忽略 bin/、config.json、*.log、agent_endpoint.json
+├── helper.md / user.md           # 早期设计笔记
+│
+├── scripts/                      # ── 一键构建脚本（输出统一到 bin/）──
+│   ├── build-helper-windows.bat      # bin/helper.exe
+│   ├── build-helper-linux-amd64.bat  # bin/helper_linux_amd64（纯静态，无需 gcc）
+│   ├── build-helper-dll.bat          # bin/helper.dll（需要 gcc）
+│   ├── build-user-windows.bat        # bin/user.exe
+│   ├── build-user-linux-amd64.bat    # bin/user_linux_amd64（纯静态，无需 gcc）
+│   └── build-user-dll.bat            # bin/user.dll（需要 gcc）
+│
+├── bin/                          # 所有编译产物输出到这里（不入库）
+│
+├── Agent/                        # ── 给 AI Agent / 自动化脚本的 CLI 对接指南 ──
+│   └── README.md                 # helper.exe -cli list/exec 的完整契约与安全红线
 │
 ├── helper/                       # ── 操控端（协助者端 / Server）独立 Go module ──
-│   ├── go.mod                    # module remoteassist-helper（go 1.26.5）
-│   ├── go.sum
-│   ├── main.go                   # 入口：解析 -attach → 初始化日志 → 管理器 → 本地 IPC → 心跳检测 → 监听 → 控制面板
-│   ├── bot.go                    # BOT 对象：ID/IP/Port/Conn/最后心跳/丢失计数/输出队列/专属日志
-│   ├── manager.go                # bots 管理器：在线列表 + 缓存区列表、botID 分配、上线/下线
-│   ├── listener.go               # TCP 监听 → WebSocket 升级；每个连接一个独立协程（注册 → 读循环）
-│   ├── heartbeat.go              # 心跳检测后台协程（每 10s 扫描一次）
-│   ├── panel.go                  # 前台 DOS 控制面板：命令解析、日志查看、bots 管理
-│   ├── panel_bot.go              # 内嵌终端（弹窗不可用时的降级路径；raw / 按行两种模式）
-│   ├── attachserver.go           # 本地 IPC 服务：终端窗口接入、令牌鉴权、输入输出桥接
-│   ├── attach_client.go          # -attach 模式：独立终端窗口进程
-│   ├── attach_window_windows.go  # Windows：cmd /c start 弹出独立终端窗口
-│   ├── attach_window_other.go    # 非 Windows：返回不支持，回退内嵌终端
-│   ├── console_windows.go        # Windows：UTF-8 代码页、VT 原始模式、窗口尺寸读取
-│   ├── console_other.go          # 非 Windows：空实现（降级为按行读取）
-│   ├── e2e_test.go               # 端到端回归测试（注册 → IPC 桥接 → 鉴权 → 单机单窗 → 下线）
-│   ├── 生成exe.bat               # 一键编译：go build -o helper.exe .
-│   ├── protocol/
-│   │   └── message.go            # 两端共用的消息协议（JSON + Base64 终端字节流）
-│   └── logx/
-│       ├── logx.go               # programlog（程序运行日志）+ botslog（连接过的主机清单）
-│       └── botlog.go             # botlog：每台机器一个专属日志（完整终端录像 + 连接事件）
+│   ├── go.mod / go.sum           # module remoteassist-helper
+│   ├── cmd/helper/main.go        # 薄入口：仅调用 internal/app.Run()
+│   ├── internal/app/             # 全部业务逻辑（package app）
+│   │   ├── main.go               #   启动流程：-attach/-cli 分流 → 日志 → 监听 → 控制面板
+│   │   ├── bot.go                #   BOT 对象：ID/名称/系统/IP/Port/心跳/输出队列/专属日志
+│   │   ├── manager.go            #   bots 管理器：在线列表 + 缓存区列表、botID 分配、上下线
+│   │   ├── listener.go           #   TCP 监听 → WebSocket 升级；注册握手（同步绑定，失败不闪退）
+│   │   ├── heartbeat.go          #   心跳检测后台协程（每 10s 扫描一次）
+│   │   ├── panel.go / panel_bot.go       # 主控制面板 / 内嵌终端降级
+│   │   ├── attachserver.go       #   本地 IPC：终端窗口接入、令牌鉴权、输入输出桥接
+│   │   ├── cliserver.go          #   本地 IPC 的 /cli 端点：Agent 查询/执行通道
+│   │   ├── agentcli.go           #   -cli 模式：list/exec 机器可读命令行
+│   │   ├── execwait.go           #   exec 待回包注册表 + bot 摘要信息
+│   │   ├── attach_client.go      #   -attach 模式：独立终端窗口进程
+│   │   ├── attach_window_*.go    #   Windows 弹窗实现 / 非 Windows 降级
+│   │   ├── console_*.go          #   Windows VT raw 模式 / 非 Windows 空实现
+│   │   └── e2e_test.go           #   端到端回归测试（桥接/鉴权/CLI/互斥/下线/name-os 透传）
+│   ├── protocol/message.go       # 两端共用的消息协议（JSON + Base64 字节流）
+│   └── logx/                     # programlog + botslog + 每 bot 的 botlog（终端录像）
 │
 └── user/                         # ── 被控端（用户端 / Client）独立 Go module ──
-    ├── go.mod                    # module remoteassist-user（go 1.26.5）
-    ├── go.sum
-    ├── main.go                   # 入口：读/建 config → 主循环（连接 → 注册 → shell → 心跳 → 转发）
-    ├── config.go                 # config.json 管理（server_addr / user_id、默认地址、首次创建）
-    ├── conn.go                   # 连接管理：Dial、注册、发送、读循环、Ctrl+C 下线通知
-    ├── shell.go                  # Shell 接口 + ShellManager（惰性启动、退出重启、输出泵送）、管道降级实现
-    ├── shell_windows.go          # Windows：ConPTY 伪终端（老系统降级为管道 shell）
-    ├── shell_other.go            # 非 Windows：sh -i 管道（开发自测）
-    ├── heartbeat.go              # 周期发送心跳（仅保活，不记录内容）
-    ├── console_windows.go        # Windows 控制台 UTF-8 代码页
-    ├── console_other.go          # 非 Windows 空实现
-    ├── config.json               # 运行时生成/读取的本地配置（被 .gitignore 忽略）
-    ├── 生成exe.bat               # 一键编译：go build -o user.exe .
-    └── protocol/
-        └── message.go            # 与操控端一致的消息协议（两份拷贝，需同步修改）
+    ├── go.mod / go.sum           # module remoteassist-user
+    ├── cmd/user/main.go          # 薄入口：仅调用 internal/agent.Run()
+    ├── internal/agent/           # 全部业务逻辑（package agent）
+    │   ├── main.go               #   读/建 config → 主循环（连接 → 注册 → shell → 心跳）
+    │   ├── config.go             #   config.json：server_addr / user_id / name（自定义名称）
+    │   ├── conn.go               #   Dial、注册（上报系统与名称）、读循环、Ctrl+C 下线
+    │   ├── sysinfo*.go           #   系统探测：Windows 版本号 / Linux /etc/os-release + 内核
+    │   ├── agentexec.go          #   Agent 一次性命令执行（独立 shell，不碰交互 PTY）
+    │   ├── shell.go / shell_windows.go / shell_other.go  # ConPTY 常驻终端与降级实现
+    │   ├── heartbeat.go          #   周期心跳
+    │   └── console_*.go          #   UTF-8 代码页
+    └── protocol/message.go       # 与操控端一致的消息协议（两份拷贝，需同步修改）
 ```
 
-**运行期自动生成的目录与文件**
+**运行期自动生成的目录与文件**（均不入库）
 
 ```
-helper/（或 helper.exe 所在工作目录）/
-└── logs/
-    ├── program.log               # 程序运行日志（INFO + ERROR）
-    ├── bots.log                  # 所有连接过的主机：时间 | botID | 地址 | 对应 botlog 文件名
-    └── botlogs/
-        └── <botID>.log           # 每台机器的专属日志（完整终端录像：命令 + 回显 + 连接事件）
+helper 进程的当前工作目录/
+├── logs/
+│   ├── program.log               # 程序运行日志（INFO + ERROR）
+│   ├── agent_endpoint.json       # 本地 CLI/Agent 接入点（地址 + 随机令牌），退出时删除
+│   ├── bots.log                  # 所有连接过的主机：时间 | botID | 名称 | 系统 | 地址 | botlog
+│   └── botlogs/<botID>.log       # 每台机器的专属日志（完整终端录像 + [AGENT] 审计行）
+└── （CLI 自动向上/向 bin 目录旁查找 logs/agent_endpoint.json）
 
-user/（或 user.exe 所在工作目录）/
-└── config.json                   # { "server_addr": "...", "user_id": "Bxxxxxxxx" }
+user 进程的当前工作目录/
+└── config.json                   # {"server_addr":"...", "user_id":"Bxxxxxxxx", "name":"自定义名称"}
 ```
 
 > 注意：日志目录 `logs/`、`config.json`、Shell 的初始工作目录等**相对路径均以进程的当前工作目录为基准**。
@@ -273,36 +280,35 @@ user/（或 user.exe 所在工作目录）/
   | user | `github.com/gorilla/websocket` | v1.5.3 | WebSocket 长连接 |
   | user | `golang.org/x/sys` | v0.8.0 | ConPTY 间接依赖 |
 
-### 4.2 编译操控端（helper）
+### 4.2 一键脚本（推荐）
 
-两端各自是**独立的 Go module**，必须**分别进入各自目录**编译。
+双击 `scripts/` 下对应脚本即可，产物统一输出到仓库根目录 `bin/`：
+
+| 脚本 | 产物 |
+|------|------|
+| `scripts/build-helper-windows.bat` | `bin/helper.exe` |
+| `scripts/build-user-windows.bat` | `bin/user.exe` |
+| `scripts/build-helper-linux-amd64.bat` | `bin/helper_linux_amd64`（纯静态，CentOS 等直接可跑） |
+| `scripts/build-user-linux-amd64.bat` | `bin/user_linux_amd64`（纯静态） |
+| `scripts/build-*-dll.bat` | `bin/*.dll`（`-buildmode=c-shared`，需 gcc/mingw） |
+
+### 4.3 手动编译
+
+两端各自是**独立的 Go module**，入口包在 `cmd/` 下：
 
 ```powershell
 cd D:\AAAGitProject\Remote_control\helper
-go build -o helper.exe .
+go build -o ..\bin\helper.exe ./cmd/helper
+
+cd ..\user
+go build -o ..\bin\user.exe ./cmd/user
 ```
 
-或直接双击 / 运行目录下的 `生成exe.bat`（内容即 `go build -o helper.exe .`）。
-
-编译时关闭控制台窗口（可选，纯后台运行，**不推荐**——控制面板依赖控制台输入）：
+编译时关闭控制台窗口（可选，纯后台运行，**不推荐 helper 使用**——控制面板依赖控制台输入）：
 
 ```powershell
-go build -ldflags="-H windowsgui" -o helper.exe .
-```
-
-### 4.3 编译被控端（user）
-
-```powershell
-cd D:\AAAGitProject\Remote_control\user
-go build -o user.exe .
-```
-
-或运行目录下的 `生成exe.bat`（内容即 `go build -o user.exe .`）。
-
-编译时隐藏控制台窗口（可选）：
-
-```powershell
-go build -ldflags="-H windowsgui" -o user.exe .
+go build -ldflags="-H windowsgui" -o ..\bin\helper.exe ./cmd/helper
+go build -ldflags="-H windowsgui" -o ..\bin\user.exe ./cmd/user
 ```
 
 > ⚠️ 隐藏窗口后程序在后台静默运行，被控端看不到任何界面，也无法通过关窗口退出，
@@ -310,17 +316,17 @@ go build -ldflags="-H windowsgui" -o user.exe .
 
 ### 4.4 交叉编译
 
-在 Windows 上编译 Linux 版本（以操控端为例）：
-
 ```powershell
-$env:GOOS="linux"; $env:GOARCH="amd64"; go build -o helper . ; $env:GOOS=""; $env:GOARCH=""
+# Windows 上编译 Linux amd64（脚本已内置这三行）
+$env:GOOS="linux"; $env:GOARCH="amd64"; $env:CGO_ENABLED="0"
+go -C user build -o ../bin/user_linux_amd64 ./cmd/user
+$env:GOOS=$null; $env:GOARCH=$null; $env:CGO_ENABLED=$null
 ```
 
-在 Linux / macOS 上编译 Windows 版本（以被控端为例）：
-
 ```bash
+# Linux / macOS 上编译 Windows 版本
 cd user
-GOOS=windows GOARCH=amd64 go build -o user.exe .
+GOOS=windows GOARCH=amd64 go build -o user.exe ./cmd/user
 ```
 
 ### 4.5 运行测试（可选）
@@ -341,8 +347,8 @@ go test ./... -v
 
 | 配置项 | 位置 | 默认值 | 说明 |
 |--------|------|--------|------|
-| `ListenAddr` | `helper/main.go` 常量 | `":8080"` | 对外监听地址 / 端口，`:8080` 表示监听本机所有网卡的 8080 端口 |
-| `LogDir` | `helper/main.go` 常量 | `"logs"` | 日志目录（相对进程工作目录） |
+| `ListenAddr` | `helper/internal/app/main.go` 常量 | `":8080"` | 对外监听地址 / 端口；也可用环境变量 `RA_LISTEN`（如 `:18080`）覆盖 |
+| `LogDir` | `helper/internal/app/main.go` 常量 | `"logs"` | 日志目录（相对进程工作目录） |
 | `HeartbeatInterval` | `helper/protocol/message.go` | `5 * time.Second` | **被控端**发送心跳的间隔 |
 | `HeartbeatPeriod` | `helper/protocol/message.go` | `10 * time.Second` | **操控端**心跳检测周期 |
 | `MaxMissed` | `helper/protocol/message.go` | `3` | 允许连续丢失的周期数，超过即下线 |
@@ -356,7 +362,8 @@ go test ./... -v
 ```json
 {
   "server_addr": "10.158.128.48:8080",
-  "user_id": "B0fe9f554"
+  "user_id": "B0fe9f554",
+  "name": "财务室-电脑"
 }
 ```
 
@@ -364,15 +371,16 @@ go test ./... -v
 |------|------|------|
 | `server_addr` | string | 操控端的 `IP:端口`。局域网填内网 IP，跨公网填公网 IP 或内网穿透地址 |
 | `user_id` | string | 身份标识（与操控端的 `botID` 是同一个东西）。首次上线由操控端分配并写回本地，之后固定不变；为空表示首次上线 |
+| `name` | string | **本机自定义名称**，手动填写即可（不需要程序支持任何设置功能）；协助端的上线提示、`bots` 列表、`-cli list` 均会显示。留空则只显示 botID |
 
 其他相关常量（需改代码后重新编译）：
 
 | 配置项 | 位置 | 默认值 | 说明 |
 |--------|------|--------|------|
-| `defaultServerAddr` | `user/config.go` | `"10.158.128.48:8080"` | 首次生成 `config.json` 时写入的默认操控端地址；**发布前应改为实际部署地址** |
-| `configPath` | `user/config.go` | `"config.json"` | 配置文件路径（相对进程工作目录） |
-| `retryInterval` | `user/main.go` | `5 * time.Second` | 断线后的自动重连间隔 |
-| ConPTY 初始尺寸 | `user/shell_windows.go` | `120 x 30` | 伪终端默认行列数，接入终端窗口后会被实际窗口尺寸覆盖 |
+| `defaultServerAddr` | `user/internal/agent/config.go` | `"127.0.0.1:8080"` | 首次生成 `config.json` 时写入的默认操控端地址；**发布前应改为实际部署地址** |
+| `configPath` | `user/internal/agent/config.go` | `"config.json"` | 配置文件路径（相对进程工作目录） |
+| `retryInterval` | `user/internal/agent/main.go` | `5 * time.Second` | 断线后的自动重连间隔 |
+| ConPTY 初始尺寸 | `user/internal/agent/shell_windows.go` | `120 x 30` | 伪终端默认行列数，接入终端窗口后会被实际窗口尺寸覆盖 |
 
 ---
 
@@ -383,16 +391,18 @@ go test ./... -v
 **步骤 1｜编译两端**
 
 ```powershell
-cd D:\AAAGitProject\Remote_control\helper ; go build -o helper.exe .
-cd D:\AAAGitProject\Remote_control\user   ; go build -o user.exe .
+# 推荐：双击 scripts/build-helper-windows.bat 和 scripts/build-user-windows.bat
+# 手动编译：
+cd D:\AAAGitProject\Remote_control\helper ; go build -o ..\bin\helper.exe ./cmd/helper
+cd D:\AAAGitProject\Remote_control\user   ; go build -o ..\bin\user.exe ./cmd/user
 ```
 
 **步骤 2｜启动操控端**
 
-在操控者机器上双击 `helper.exe` 或命令行运行：
+在操控者机器上双击 `bin\helper.exe` 或命令行运行：
 
 ```powershell
-.\helper.exe
+.\bin\helper.exe
 ```
 
 出现 `assist> ` 提示符即表示程序已在后台监听 `8080` 端口。
@@ -419,7 +429,7 @@ New-NetFirewallRule -DisplayName "RemoteAssist 8080" -Direction Inbound -Protoco
 
 **步骤 4｜配置并启动被控端**
 
-把 `user.exe` 放到被控端某个目录，**首次运行**会在当前工作目录生成 `config.json`：
+把 `bin\user.exe` 放到被控端某个目录，**首次运行**会在当前工作目录生成 `config.json`：
 
 ```powershell
 .\user.exe
@@ -548,7 +558,7 @@ A：`helper.exe` 所在工作目录的 `logs/` 下：`program.log`（程序日�
 `botlogs/<botID>.log`（每台机器的终端录像）。
 
 **Q8：想换监听端口 / 心跳参数怎么办？**
-A：见「五、配置项」。端口在 `helper/main.go` 的 `ListenAddr`；心跳在两端
+A：见「五、配置项」。端口在 `helper/internal/app/main.go` 的 `ListenAddr`（也可用环境变量 `RA_LISTEN` 覆盖）；心跳在两端
 `protocol/message.go` 的 `HeartbeatInterval` / `HeartbeatPeriod` / `MaxMissed`。
 **两端心跳常量必须保持一致**，改完需分别重新编译。
 

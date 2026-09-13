@@ -63,15 +63,15 @@ func NewBotsLog(dir string) *BotsLog {
 	return &BotsLog{path: filepath.Join(dir, "bots.log")}
 }
 
-// Add 追加一条上线记录：时间 | botID | 地址 | botlog 文件名
-func (b *BotsLog) Add(botID, addr string) {
+// Add 追加一条上线记录：时间 | botID | 名称 | 系统 | 地址 | botlog 文件名
+func (b *BotsLog) Add(botID, name, osName, addr string) {
 	f, err := os.OpenFile(b.path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
 		return
 	}
 	defer f.Close()
-	fmt.Fprintf(f, "%s | %-10s | %-21s | botlogs/%s.log\n",
-		time.Now().Format("2006-01-02 15:04:05"), botID, addr, botID)
+	fmt.Fprintf(f, "%s | %-10s | %-16s | %-40s | %-21s | botlogs/%s.log\n",
+		time.Now().Format("2006-01-02 15:04:05"), botID, name, osName, addr, botID)
 }
 
 // Read 返回全部内容（log --bots / bots -a 用）
