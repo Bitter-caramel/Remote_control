@@ -5,7 +5,6 @@ import (
 	"os"
 	"os/signal"
 	"sync"
-	"syscall"
 	"time"
 
 	"remoteassist-user/protocol"
@@ -49,7 +48,7 @@ func Run() {
 	// 2. 退出信号处理：在重连循环之外只注册一次，覆盖 Ctrl+C(SIGINT)、
 	//    Ctrl+\(SIGQUIT)、SIGTERM。避免每次重连重复注册/泄漏导致信号无法退出。
 	sigs := make(chan os.Signal, 1)
-	signal.Notify(sigs, os.Interrupt, syscall.SIGTERM, syscall.SIGQUIT)
+	signal.Notify(sigs, exitSignals()...)
 	go func() {
 		<-sigs
 		fmt.Println("\n正在退出……")
@@ -63,6 +62,16 @@ func Run() {
 		}
 		os.Exit(0)
 	}()
+
+	// 忽略 Ctrl+Z(SIGTSTP)：被挂起会表现为"卡死不动"
+	if ign := ignoreSignals(); len(ign) > 0 {
+		stp := make(chan os.Signal, 1)
+		signal.Notify(stp, ign...)
+		go func() {
+			for range stp {
+			}
+		}()
+	}
 
 	// 3. 主循环：保持长连接；断开后自动重连
 	for {

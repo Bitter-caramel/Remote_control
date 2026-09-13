@@ -27,7 +27,9 @@ user/
 │   ├── agentexec.go            #   Agent 一次性命令执行（独立 shell，不碰交互终端）
 │   ├── shell.go                #   常驻交互式 shell 管理：惰性启动、退出自动重启、输出泵送
 │   ├── shell_windows.go        #   Windows：ConPTY 伪终端（旧系统自动降级为管道 shell）
-│   ├── shell_other.go          #   非 Windows 平台的 shell 实现（开发自测用）
+│   ├── pty_unix.go             #   Linux：/dev/ptmx 真伪终端（回显/信号/行编辑由内核行规程完成）
+│   ├── shell_other.go          #   其它类 Unix 平台（开发自测用）：sh -i 管道
+│   ├── signals_*.go            #   退出/忽略的信号清单（Ctrl+C 退出、忽略 Ctrl+Z）
 │   ├── console_*.go            #   UTF-8 代码页（Windows）/ 空实现
 │   └── heartbeat.go            #   周期心跳
 └── protocol/
@@ -123,11 +125,14 @@ GOOS=windows GOARCH=amd64 go build -o user.exe ./cmd/user
 
 ### 远程终端是怎么工作的（重要）
 
-- 协助者接入后，你机器上会启动一个**常驻的 `cmd.exe` 交互式终端**（基于
-  Windows ConPTY 伪终端，需要 **Windows 10 1809 / Server 2019 或更新版本**；
-  更老的系统会自动降级为管道模式，目录仍可保持，但少数交互式程序不可用）。
-- 终端从你的**用户主目录**（`C:\Users\你的用户名`）启动，不是 user.exe 所在目录。
-- 这是一个完整终端：协助者可以切换任意盘/目录、设置环境变量、运行交互式程序。
+- 协助者接入后，你机器上会启动一个**常驻的交互式终端**：
+  - **Windows**：`cmd.exe`（ConPTY 伪终端，需要 **Windows 10 1809 / Server 2019 或更新版本**；
+    更老的系统自动降级为管道模式，目录仍可保持，但少数交互式程序不可用）；
+  - **Linux**：你的登录 shell（`$SHELL`，回退 bash/sh），基于 `/dev/ptmx` **真伪终端**——
+    回显、Ctrl+C/Ctrl+D/Ctrl+Z 信号、行编辑与在本机终端完全一致。
+- 终端从你的**用户主目录**启动（Windows 为 `C:\Users\你的用户名`，Linux 为 `$HOME`），
+  不是 user.exe 所在目录。
+- 这是一个完整终端：协助者可以切换任意盘/目录、设置环境变量、运行交互式程序（vim、htop 等）。
 - 你这边不会弹出新窗口，一切操作在协助者的终端里完成。终端会话在连接期间一直存活，
   协助者临时退出面板不会关闭它。
 
