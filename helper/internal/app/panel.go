@@ -42,6 +42,7 @@ func RunPanel(in io.Reader, out io.Writer, m *Manager, prog *logx.ProgramLog, bo
 		case "exit":
 			// 退出程序：不再监听端口，不再执行服务程序，直至下次启动
 			prog.Info("操作者执行 exit，程序退出")
+			time.Sleep(3 * time.Second) // 等待所有服务程序退出，避免日志丢失
 			fmt.Fprintln(out, "程序已退出。")
 			return
 		default:
