@@ -448,6 +448,10 @@ New-NetFirewallRule -DisplayName "RemoteAssist 8080" -Direction Inbound -Protoco
 
 此时操控端面板的 `bots` 命令中即可看到该机器（已自动分配 `botID`，并写回被控端 `config.json`）。
 
+> **无界面 Linux 服务器**：可改用后台子命令，不占用终端窗口——
+> `./user_linux_amd64 start` 后台运行、`status` 查状态、`stop` 停止
+> （详见 [`user/README.md`](user/README.md) 的「无界面服务器后台运行」）。
+
 **步骤 5｜远程操作**
 
 在操控端面板中对目标机器开终端：
@@ -485,6 +489,7 @@ assist>
 
 - **普通模式**：直接关闭窗口，或按 `Ctrl+C`（程序会先向操控端发送 `bye` 下线通知再退出）。
 - **隐藏窗口模式**（`-H windowsgui` 编译）：打开任务管理器结束 `user.exe` 进程。
+- **后台模式**（`user start` 启动，适合无界面 Linux 服务器）：执行 `./user_linux_amd64 stop` 优雅停止。
 - 连接意外断开（网络抖动、操控端重启）时，被控端会**每 5 秒自动重连一次**，无需人工干预。
 
 ### 6.4 日志查看

@@ -123,6 +123,22 @@ GOOS=windows GOARCH=amd64 go build -o user.exe ./cmd/user
 看到 `已连接协助者服务器，等待指令。` 即表示连接成功。
 此时协助者端就能在他的面板里看到你的机器并接入终端。
 
+### 2.1 无界面服务器后台运行（start / stop / status）
+
+无图形界面的 Linux 服务器（纯终端）上，不想让程序占住当前窗口，可用自带的后台子命令：
+
+```bash
+./user_linux_amd64 start     # 后台运行，立即返回，不占用终端窗口
+./user_linux_amd64 status    # 查看是否在运行 + pid
+./user_linux_amd64 stop      # 停止（Unix 发送 SIGTERM，优雅退出并通知协助者下线）
+./user_linux_amd64           # 不带参数 = 前台运行（与原来完全一致）
+```
+
+- 后台进程的 pid 记录在 `user.pid`，输出写入 `logs/user.log`（均与 `config.json` 同目录），
+  因此 **start / stop / status 需要在同一目录下执行**；
+- 已在运行时再次 `start` 会提示"已在运行 (pid N)"，不会重复启动；
+- 进程被强杀（如 `kill -9`）后残留的 pid 文件，会被 `stop` / `status` 自动识别并清理。
+
 ### 远程终端是怎么工作的（重要）
 
 - 协助者接入后，你机器上会启动一个**常驻的交互式终端**：
@@ -139,6 +155,7 @@ GOOS=windows GOARCH=amd64 go build -o user.exe ./cmd/user
 ### 3. 退出
 
 - 普通模式：直接关闭窗口，或按 `Ctrl+C`（程序会先通知协助者再退出）。
+- 后台模式（`start` 启动）：执行 `user stop`（Linux 为 `./user_linux_amd64 stop`）。
 - 隐藏窗口模式：打开任务管理器，结束 `user.exe` 进程。
 
 断线后程序会自动每 5 秒重连一次。

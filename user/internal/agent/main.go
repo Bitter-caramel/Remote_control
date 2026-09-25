@@ -43,6 +43,7 @@ func Run() {
 		fmt.Printf("已读取本地身份: %s（服务器: %s）\n", who, cfg.ServerAddr)
 	}
 	fmt.Printf("本机系统: %s\n", DetectOS())
+	fmt.Println("提示: 后台运行用 `user start`，停止用 `user stop`")
 	fmt.Printf("正在连接协助者 %s ……\n", cfg.ServerAddr)
 
 	// 2. 退出信号处理：在重连循环之外只注册一次，覆盖 Ctrl+C(SIGINT)、
