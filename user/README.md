@@ -16,22 +16,28 @@
 ```
 user/
 ├── go.mod / go.sum             # 本端独立 module: remoteassist-user
-├── cmd/user/main.go            # 薄入口，仅调用 internal/agent.Run()
-├── internal/agent/             # 全部业务逻辑（package agent）
-│   ├── main.go                 #   读/建 config → 主动连接 → 注册 → 心跳 → 转发终端
-│   ├── config.go               #   config.json：server_addr / user_id / name
-│   ├── conn.go                 #   建立 WebSocket、注册（上报系统与名称）、断线重连、消息收发
-│   ├── sysinfo.go              #   系统信息探测（公共）
-│   ├── sysinfo_windows.go      #   Windows：版本号（主.次.构建号）
-│   ├── sysinfo_other.go        #   Linux：/etc/os-release + 内核版本；其它平台仅 goos/goarch
-│   ├── agentexec.go            #   Agent 一次性命令执行（独立 shell，不碰交互终端）
-│   ├── shell.go                #   常驻交互式 shell 管理：惰性启动、退出自动重启、输出泵送
-│   ├── shell_windows.go        #   Windows：ConPTY 伪终端（旧系统自动降级为管道 shell）
-│   ├── pty_unix.go             #   Linux：/dev/ptmx 真伪终端（回显/信号/行编辑由内核行规程完成）
-│   ├── shell_other.go          #   其它类 Unix 平台（开发自测用）：sh -i 管道
-│   ├── signals_*.go            #   退出/忽略的信号清单（Ctrl+C 退出、忽略 Ctrl+Z）
-│   ├── console_*.go            #   UTF-8 代码页（Windows）/ 空实现
-│   └── heartbeat.go            #   周期心跳
+├── cmd/user/main.go            # 薄入口，仅调用 internal/agent 的入口函数
+├── internal/                   # 按职责拆分的子包
+│   ├── agent/                  #   顶层装配
+│   │   ├── main.go             #     读/建 config → 主动连接 → 注册 → 心跳 → 转发终端 + 自动重连
+│   │   └── daemon.go           #     start/stop/status 三个入口的薄转接（避免 agent ↔ daemon 成环）
+│   ├── core/                   #   连接与身份
+│   │   ├── config.go           #     config.json：server_addr / user_id / name
+│   │   ├── conn.go             #     建立 WebSocket、注册（上报系统与名称）、消息收发
+│   │   └── heartbeat.go        #     周期心跳
+│   ├── term/                   #   常驻交互式 shell
+│   │   ├── shell.go            #     惰性启动、退出自动重启、输出泵送
+│   │   ├── shell_windows.go    #     Windows：ConPTY 伪终端（旧系统自动降级为管道 shell）
+│   │   ├── pty_unix.go         #     Linux：/dev/ptmx 真伪终端（回显/信号/行编辑由内核行规程完成）
+│   │   └── shell_other.go      #     其它类 Unix 平台（开发自测用）：sh -i 管道
+│   ├── exec/agentexec.go       #   Agent 一次性命令执行（独立 shell，不碰交互终端）
+│   ├── sys/                    #   平台系统能力
+│   │   ├── sysinfo.go          #     系统信息探测（公共）
+│   │   ├── sysinfo_windows.go  #     Windows：版本号（主.次.构建号）
+│   │   ├── sysinfo_other.go    #     Linux：/etc/os-release + 内核版本；其它平台仅 goos/goarch
+│   │   ├── signals_*.go        #     退出/忽略的信号清单（Ctrl+C 退出、忽略 Ctrl+Z）
+│   │   └── console_*.go        #     UTF-8 代码页（Windows）/ 空实现
+│   └── daemon/                 #   后台运行：start / stop / status + pid 文件 + 平台差异
 └── protocol/
     └── message.go              # 与协助者端共用的消息协议（JSON，字节流用 base64 承载）
 ```

@@ -1,7 +1,7 @@
 package app
 
 // 端到端回归测试：
-// 注册 → 本地 IPC 终端窗口桥接（输入/输出/鉴权/单机单窗/下线通知）→ bye/心跳销毁。
+// 注册 → 本地 IPC 终端窗口桥接（输入/输出/鉴权/多窗口广播/下线通知）→ bye/心跳销毁。
 
 import (
 	"bytes"
@@ -15,14 +15,30 @@ import (
 
 	"github.com/gorilla/websocket"
 
+	"remoteassist-helper/internal/core"
+	"remoteassist-helper/internal/ipc"
+	"remoteassist-helper/internal/panel"
+	"remoteassist-helper/internal/store"
+	"remoteassist-helper/internal/uplink"
 	"remoteassist-helper/logx"
 	"remoteassist-helper/protocol"
 )
 
-// newTestServer 用 httptest 起一个真实的远程 WebSocket 服务（user 端连入侧）
-func newTestServer(t *testing.T, m *Manager, prog *logx.ProgramLog) *httptest.Server {
+// newTestStore 在临时目录里开一个空的本地数据库（机器等级/账号等）
+func newTestStore(t *testing.T) *store.Store {
 	t.Helper()
-	ts := httptest.NewServer(wsHandler(m, prog))
+	st, err := store.Open(filepath.Join(t.TempDir(), "helper.db"))
+	if err != nil {
+		t.Fatalf("打开测试数据库失败: %v", err)
+	}
+	t.Cleanup(func() { st.Close() })
+	return st
+}
+
+// newTestServer 用 httptest 起一个真实的远程 WebSocket 服务（user 端连入侧）
+func newTestServer(t *testing.T, m *core.Manager, prog *logx.ProgramLog) *httptest.Server {
+	t.Helper()
+	ts := httptest.NewServer(uplink.Handler(m, prog, newTestStore(t)))
 	t.Cleanup(ts.Close)
 	return ts
 }
@@ -85,9 +101,9 @@ func fakeClient(t *testing.T, url, userID string) (*websocket.Conn, string) {
 }
 
 // attachDial 模拟一个弹出的终端窗口，连本地 IPC 完成接入握手
-func attachDial(t *testing.T, asrv *AttachServer, botID, token string) *websocket.Conn {
+func attachDial(t *testing.T, srv *ipc.Server, botID, token string) *websocket.Conn {
 	t.Helper()
-	conn, _, err := websocket.DefaultDialer.Dial("ws://"+asrv.Addr()+"/attach", nil)
+	conn, _, err := websocket.DefaultDialer.Dial("ws://"+srv.Addr()+"/attach", nil)
 	if err != nil {
 		t.Fatalf("IPC 拨号失败: %v", err)
 	}
@@ -119,18 +135,18 @@ func TestEndToEnd(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = prog.Close() })
 	botslog := logx.NewBotsLog(dir)
-	m := NewManager(dir, prog, botslog)
+	m := core.NewManager(dir, prog, botslog)
 
 	// 远程接入侧
 	ts := newTestServer(t, m, prog)
 	url := "ws" + strings.TrimPrefix(ts.URL, "http") + "/ws"
 
 	// 本地终端窗口 IPC
-	asrv, err := NewAttachServer(m, dir)
+	srv, err := ipc.NewServer(m, dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(asrv.Close)
+	t.Cleanup(srv.Close)
 
 	conn1, id1 := fakeClient(t, url, "")
 	if !strings.HasPrefix(id1, "B") {
@@ -141,7 +157,7 @@ func TestEndToEnd(t *testing.T) {
 	defer conn2.Close()
 
 	// --- 鉴权失败：错误令牌 ---
-	bad, _, err := websocket.DefaultDialer.Dial("ws://"+asrv.Addr()+"/attach", nil)
+	bad, _, err := websocket.DefaultDialer.Dial("ws://"+srv.Addr()+"/attach", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -155,7 +171,7 @@ func TestEndToEnd(t *testing.T) {
 	bad.Close()
 
 	// --- 正常接入 + 输入输出桥接 ---
-	term := attachDial(t, asrv, id2, asrv.Token())
+	term := attachDial(t, srv, id2, srv.Token())
 	defer term.Close()
 	term.WriteJSON(protocol.Message{Type: protocol.TypeInput, Data: protocol.EncodeB64([]byte("whoami\r\n"))})
 
@@ -179,16 +195,28 @@ func TestEndToEnd(t *testing.T) {
 		t.Fatalf("终端桥接输出异常: %q", got)
 	}
 
-	// --- 同一 bot 第二个窗口应被拒绝 ---
-	dup, _, _ := websocket.DefaultDialer.Dial("ws://"+asrv.Addr()+"/attach", nil)
-	dup.WriteJSON(protocol.Message{Type: protocol.TypeAttach, UserID: id2, Data: asrv.Token()})
+	// --- 同一 bot 允许第二个接入者（多窗口/多浏览器共用同一台机器）---
+	dup := attachDial(t, srv, id2, srv.Token())
+	defer dup.Close()
+	dup.WriteJSON(protocol.Message{Type: protocol.TypeInput, Data: protocol.EncodeB64([]byte("dup\r\n"))})
 	dup.SetReadDeadline(time.Now().Add(3 * time.Second))
-	var dupAck protocol.Message
-	dup.ReadJSON(&dupAck)
-	if dupAck.Data == "ok" {
-		t.Error("同一机器不应允许两个终端窗口同时接入")
+	dupGot := ""
+	for {
+		var msg protocol.Message
+		if err := dup.ReadJSON(&msg); err != nil {
+			break
+		}
+		if msg.Type == protocol.TypeOutput {
+			p, _ := protocol.DecodeB64(msg.Data)
+			dupGot += string(p)
+			if strings.Contains(dupGot, "dup") && strings.Contains(dupGot, "E2E-RESPONSE") {
+				break
+			}
+		}
 	}
-	dup.Close()
+	if !strings.Contains(dupGot, "E2E-RESPONSE") {
+		t.Fatalf("第二接入者应能同时收到广播输出，实际: %q", dupGot)
+	}
 
 	// --- botlog 终端录像包含桥接内容 ---
 	botlogContent, err := logx.ReadBotLog(dir, id2)
@@ -221,7 +249,7 @@ func TestEndToEnd(t *testing.T) {
 	// 面板基本命令仍然正常（bot 不再走内嵌路径）
 	script := "bots\nlog --bots\nexit\n"
 	var out bytes.Buffer
-	RunPanel(strings.NewReader(script), &out, m, prog, botslog, asrv)
+	panel.RunPanel(strings.NewReader(script), &out, m, prog, botslog, srv)
 	console := out.String()
 	if !strings.Contains(console, id1) {
 		t.Errorf("bots 输出缺少在线机器:\n%s", console)
@@ -244,9 +272,9 @@ func TestEndToEnd(t *testing.T) {
 }
 
 // cliDial 模拟 helper.exe -cli：连 /cli 完成令牌握手
-func cliDial(t *testing.T, asrv *AttachServer, token string) *websocket.Conn {
+func cliDial(t *testing.T, srv *ipc.Server, token string) *websocket.Conn {
 	t.Helper()
-	conn, _, err := websocket.DefaultDialer.Dial("ws://"+asrv.Addr()+"/cli", nil)
+	conn, _, err := websocket.DefaultDialer.Dial("ws://"+srv.Addr()+"/cli", nil)
 	if err != nil {
 		t.Fatalf("CLI 拨号失败: %v", err)
 	}
@@ -267,26 +295,26 @@ func TestCLIFlow(t *testing.T) {
 	dir := t.TempDir()
 	prog, _ := logx.NewProgramLog(dir)
 	t.Cleanup(func() { _ = prog.Close() })
-	m := NewManager(dir, prog, logx.NewBotsLog(dir))
+	m := core.NewManager(dir, prog, logx.NewBotsLog(dir))
 	ts := newTestServer(t, m, prog)
 	url := "ws" + strings.TrimPrefix(ts.URL, "http") + "/ws"
-	asrv, err := NewAttachServer(m, dir)
+	srv, err := ipc.NewServer(m, dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(asrv.Close)
+	t.Cleanup(srv.Close)
 
 	conn, id := fakeClient(t, url, "Bclitest1")
 	defer conn.Close()
 
 	// 发现文件已写入
-	if data, err := os.ReadFile(filepath.Join(dir, endpointFileName)); err != nil ||
-		!strings.Contains(string(data), asrv.Addr()) {
+	if data, err := os.ReadFile(filepath.Join(dir, ipc.EndpointFileName)); err != nil ||
+		!strings.Contains(string(data), srv.Addr()) {
 		t.Errorf("endpoint 发现文件异常: %v %s", err, data)
 	}
 
 	// --- 错误令牌拒绝 ---
-	bad, _, _ := websocket.DefaultDialer.Dial("ws://"+asrv.Addr()+"/cli", nil)
+	bad, _, _ := websocket.DefaultDialer.Dial("ws://"+srv.Addr()+"/cli", nil)
 	bad.WriteJSON(protocol.Message{Type: protocol.TypeCLIHello, Data: "nope"})
 	bad.SetReadDeadline(time.Now().Add(3 * time.Second))
 	var badAck protocol.Message
@@ -296,7 +324,7 @@ func TestCLIFlow(t *testing.T) {
 	}
 	bad.Close()
 
-	c := cliDial(t, asrv, asrv.Token())
+	c := cliDial(t, srv, srv.Token())
 	defer c.Close()
 
 	// --- list ---
@@ -309,7 +337,7 @@ func TestCLIFlow(t *testing.T) {
 	if !strings.Contains(list.Data, id) {
 		t.Errorf("list 结果缺少 bot: %s", list.Data)
 	}
-	var infos []BotInfo
+	var infos []core.BotInfo
 	if json.Unmarshal([]byte(list.Data), &infos) != nil || len(infos) != 1 || infos[0].ID != id {
 		t.Errorf("list JSON 解析异常: %s", list.Data)
 	}

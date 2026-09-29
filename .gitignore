@@ -28,3 +28,9 @@ logs/
 # user 端首次运行在【运行目录】下自动生成 config.json，
 # 内含协助者服务器地址、本机唯一身份 user_id、自定义名称 name，属本地私有信息
 config.json
+# helper 端首次运行在 logs/ 下生成 helper.key（令牌签名密钥）
+# 与 helper.db（账号加盐哈希、权限、机器等级、审计），泄露即等于交出控制台
+*.key
+*.db
+*.db-wal
+*.db-shm

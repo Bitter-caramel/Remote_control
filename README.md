@@ -39,6 +39,11 @@ Go 程序（两个独立 Go module）组成：
   颜色与光标控制序列全部保持，等价于坐在那台机器前敲键盘。
 - **多机并发管理**：每台被控机器对应一个独立协程与一个 `BOT` 对象，互不干扰；
   操控端可为不同机器各弹一个独立终端窗口，同时管理多台主机。
+- **浏览器控制台（WebUI）**：`helper.exe` 启动后同时是一个 Web 服务，同网段任意设备
+  用浏览器打开 `http://<操控端 IP>:8080/` 即可获得仿桌面 IM 三栏界面的控制台，
+  无需安装任何客户端，主区是**真正的终端**（xterm.js）而非聊天式输入框。
+- **登录鉴权 + 三级角色**：控制台需登录，角色分观察者 / 普通用户 / 管理员；
+  每台机器另有可见等级，可按敏感程度限定哪些角色能看到并操作它。账号与审计日志存入本地 SQLite。
 - **唯一身份识别**：机器首次上线由操控端分配一个 `botID`（如 `B0fe9f554`）并保存到被控端本地
   `config.json`，之后靠它识别身份，重连后仍是同一台机器。
 - **完整操作留痕**：每台机器有专属日志 `botlogs/<botID>.log`，保存完整终端录像（命令 + 回显）。
@@ -86,15 +91,30 @@ Go 程序（两个独立 Go module）组成：
 │  │ helper.exe -attach ... │                   │        │                                   │
 │  └────────────────────────┘                   │        │                                   │
 │                                               │        │                                   │
-│  前台：DOS 控制面板 (panel.go)                 │        │                                   │
+│  ⑧ 同一端口 /ws(被控端) + /(浏览器控制台)      │        │                                   │
+│  ┌────────────────────────┐  ┌─────────────┐  │        │                                   │
+│  │ Web 控制台 (webui/)    │  │ DOS 面板    │  │        │                                   │
+│  │  浏览器 ⇄ WS /api/term │  │ (panel/)    │  │        │                                   │
+│  └───────────┬────────────┘  └──────┬──────┘  │        │                                   │
+│              └──────┬───────────────┘         │        │                                   │
+│                     ▼ 都从 Manager 取 BOT      │        │                                   │
 │  后台：心跳检测 (heartbeat.go) / 监听          │        │                                   │
 └──────────────────────────────────────────────┘        └───────────────────────────────────┘
 ```
 
+> 被控端接入（`/ws`）与浏览器控制台（`/`、`/api/*`）**共用同一个监听端口**：
+> 由 `internal/app` 装配时用一个 `http.ServeMux` 分别挂载，互不干扰。
+
 ### 2.2 关键设计
 
-- **面向对象 + 一机一协程**：每台被控机器对应一个 `BOT` 对象，由 `listener.go` 中的一个独立
+- **面向对象 + 一机一协程**：每台被控机器对应一个 `BOT` 对象，由 `internal/uplink` 中的一个独立
   读循环协程服务；协程之间不互相通信，只通过 `Manager` 的加锁容器协调，简化并发管理。
+- **订阅者广播模型**：`BOT` 内部维护一个「订阅者集合」，远端输出会**广播**给所有订阅者，
+  并保留最近 64KB 的输出回放缓冲（新接入者立刻能看到上下文，而不是一片空白）。
+  因此本机终端窗口与多个浏览器页面可以**同时接入同一台机器**，各自独立发送输入。
+- **按职责拆分的子包**：操控端核心逻辑不再是单个大包，而是 `core`（状态）/ `uplink`（被控端连入）
+  / `ipc`（本机接入）/ `term`（控制台原始模式）/ `panel`（DOS 面板）/ `webui`（浏览器控制台）
+  / `app`（启动装配）各司其职，新增功能只需新增子包并在 `app` 里接线。
 - **两级容器管理**：`Manager` 持有 `bots`（在线机器）与 `buffered`（疑似掉线、缓存等待的机器）
   两个列表。心跳丢失先进缓存区，连续 3 个周期未恢复才真正销毁协程、标记下线。
 - **两端协议完全对称**：`helper/protocol/message.go` 与 `user/protocol/message.go` 是**内容一致**
@@ -104,9 +124,20 @@ Go 程序（两个独立 Go module）组成：
 - **本地 IPC 独立于远程连接**：操控端弹出的「终端窗口」是**另一个 helper.exe 进程**（`-attach` 模式），
   它只连本机 `127.0.0.1` 的随机端口，由主进程桥接到对应机器的远程 WebSocket。
   好处是主面板不被终端输入输出占用，可同时开多个窗口管理多台机器。
-- **平台相关代码隔离**：两端都用 `_windows.go` / `_unix.go` / `_other.go` 后缀 + `//go:build` 构建约束
+  浏览器控制台走的是**同一个端口上的 WebSocket**（`/api/term?bot=<ID>`），桥接的是同一套
+  `BOT` 订阅者，因此 DOS 窗口与浏览器页面看到的完全是同一份终端。
+- **平台相关代码隔离**：两端都用 `_windows.go` / `_other.go` 后缀 + `//go:build` 构建约束
   隔离平台差异。Windows 用 ConPTY、Linux 用 `/dev/ptmx` 伪终端（PTY），功能完整且对等；
   macOS 等其它平台仍可编译（降级为管道 shell、内嵌终端），便于开发自测。
+- **登录鉴权 + 三级角色**：操控端自带一套轻量鉴权。口令以 PBKDF2-HMAC-SHA256（每账号独立随机盐）
+  哈希存库；登录后下发自实现的 HS256 JWT 会话令牌（`httpOnly` + `SameSite=Strict` Cookie）。
+  角色分观察者（只读）/ 普通用户（可操作）/ 管理员（用户与机器管理），**权限以数据库为准**，
+  改角色 / 改口令 / 停用会立刻让旧令牌失效。
+- **机器可见等级**：每台机器带一个 `min_role`，只有角色值 ≥ 该等级的账号才能看到并操作它，
+  可按机器敏感程度分级（例如把某些机器只留给管理员）。
+- **本地 SQLite 持久化**：账号、机器等级、登录会话、审计日志存入 `logs/helper.db`。
+  选用纯 Go 的 `modernc.org/sqlite`，**不依赖 cgo**，因此 `CGO_ENABLED=0` 的
+  Linux 交叉编译仍然可用。
 
 ### 2.3 通信协议（`protocol/message.go`）
 
@@ -132,6 +163,11 @@ Go 程序（两个独立 Go module）组成：
 | `TypeBye` | `bye` | 被控端 → 操控端 / IPC → 终端窗口 | 主动下线通知 / 通知终端窗口机器已下线 |
 | `TypeAttach` | `attach` | 终端窗口 → 主程序（本地 IPC） | 请求接入某 bot（`userID`=botID，`data`=令牌） |
 | `TypeAttachAck` | `attach_ack` | 主程序 → 终端窗口 | 接入结果（`data` = `ok` 或错误原因） |
+
+> 浏览器控制台的终端通道（`WS /api/term?bot=<ID>`）不走上面的 `protocol.Message`，
+> 而是用一份更精简的页面内协议：上行 `{"type":"input"|"resize","data":<base64>,"cols":n,"rows":n}`，
+> 下行 `{"type":"output"|"bye"|"error","data":"..."}`。它桥接的是操控端**内部**的 `BOT`，
+> 与远端协议无关，因此不需要两端同步修改。
 
 ### 2.4 心跳与下线机制
 
@@ -176,11 +212,29 @@ Go 程序（两个独立 Go module）组成：
   远端输出（含颜色 / 光标控制）实时渲染；
 - **`Ctrl+C` 透传给远端**（中断远端正在运行的程序），**不会**关闭窗口；
   **`Ctrl+]` 关闭 / 脱离**终端窗口（脱离后远端 shell 继续存活，再次 `bot [ID]` 仍是原现场）；
-- **同一台机器同时只允许开一个终端窗口**（用 CAS 独占终端窗口位，防止多窗口争抢输入）；
+- **同一台机器可以被多个终端同时接入**（多个 DOS 窗口、多个浏览器页面、DOS 窗口与浏览器混用均可）：
+  远端输出广播给所有接入者，任何一方的按键都会生效，互不排斥；
 - 机器下线时窗口会提示并等待回车，不会闪退；
 - 不支持弹窗的平台（或弹窗失败）自动降级为当前窗口内的**内嵌终端**（按行模式，输入 `/quit` 退出）。
 
-**本地 IPC 的安全设计（`attachserver.go`）**
+**浏览器控制台（`webui/`）**
+
+- 页面前端全部通过 `go:embed` 内嵌进 `helper.exe`（含 xterm.js 5.5 + fit 插件），
+  **不依赖外网 CDN**，离线可用；
+- 布局仿桌面版 IM 三栏结构：最左导航栏（功能选择）→ 第二列列表（如在线机器）→ 主区内容；
+- 「终端」功能主区是一整块 **xterm.js 真终端**，没有聊天式发送框，按键直接透传到远端 shell，
+  体验与 DOS 下的 `bot [ID]` 弹窗一致（含 `Ctrl+C`、方向键、Tab 与 ANSI 颜色）；
+- 前端功能面板通过 `registerPanel()` **自注册**，外壳只读注册表，新增功能不需要改外壳；
+- **登录鉴权**：`POST /api/login` / `POST /api/logout` / `GET /api/me`；
+  其余 `/api/*` 一律要求登录，未登录返回 401、权限不足返回 403；
+- HTTP/WS 接口：`GET /api/bots`（当前角色可见的在线机器）、`GET /api/logs`
+  （program / bots / 单机 botlog，受角色与机器等级约束）、`WS /api/term?bot=<ID>`（终端桥接）；
+  管理员另有 `GET /api/bots/all`、`POST /api/bots/{id}/min-role|note`、
+  `GET|POST /api/users*` 等用户与机器管理接口；
+- 终端 WebSocket 的 `CheckOrigin` 只放行**同源**来源（无 Origin 的非浏览器客户端放行）；
+  被控端接入的 `/ws` 仍保持宽松（被控端凭 `userID` 自称身份，无鉴权）。
+
+**本地 IPC 的安全设计（`ipc/server.go`）**
 
 - 只监听 `127.0.0.1`（外部网络不可达），端口随机分配（`127.0.0.1:0`）；
 - 接入必须携带**每次启动重新生成的 16 字节随机令牌**；
@@ -194,7 +248,7 @@ Go 程序（两个独立 Go module）组成：
 ```
 Remote_control/
 ├── README.md                     # 本文件：项目总览、编译、配置、使用说明与免责声明
-├── .gitignore                    # 忽略 bin/、config.json、*.log、agent_endpoint.json
+├── .gitignore                    # 忽略 bin/、config.json、*.log、agent_endpoint.json、*.db、*.key
 ├── helper.md / user.md           # 早期设计笔记
 │
 ├── scripts/                      # ── 一键构建脚本（输出统一到 bin/）──
@@ -213,36 +267,58 @@ Remote_control/
 ├── helper/                       # ── 操控端（协助者端 / Server）独立 Go module ──
 │   ├── go.mod / go.sum           # module remoteassist-helper
 │   ├── cmd/helper/main.go        # 薄入口：仅调用 internal/app.Run()
-│   ├── internal/app/             # 全部业务逻辑（package app）
-│   │   ├── main.go               #   启动流程：-attach/-cli 分流 → 日志 → 监听 → 控制面板
-│   │   ├── bot.go                #   BOT 对象：ID/名称/系统/IP/Port/心跳/输出队列/专属日志
-│   │   ├── manager.go            #   bots 管理器：在线列表 + 缓存区列表、botID 分配、上下线
-│   │   ├── listener.go           #   TCP 监听 → WebSocket 升级；注册握手（同步绑定，失败不闪退）
-│   │   ├── heartbeat.go          #   心跳检测后台协程（每 10s 扫描一次）
-│   │   ├── panel.go / panel_bot.go       # 主控制面板 / 内嵌终端降级
-│   │   ├── attachserver.go       #   本地 IPC：终端窗口接入、令牌鉴权、输入输出桥接
-│   │   ├── cliserver.go          #   本地 IPC 的 /cli 端点：Agent 查询/执行通道
-│   │   ├── agentcli.go           #   -cli 模式：list/exec 机器可读命令行
-│   │   ├── execwait.go           #   exec 待回包注册表 + bot 摘要信息
-│   │   ├── attach_client.go      #   -attach 模式：独立终端窗口进程
-│   │   ├── attach_window_*.go    #   Windows 弹窗实现 / 非 Windows 降级
-│   │   ├── console_*.go          #   Windows VT raw 模式 / 非 Windows 空实现
-│   │   └── e2e_test.go           #   端到端回归测试（桥接/鉴权/CLI/互斥/下线/name-os 透传）
+│   ├── internal/                 # 按职责拆分的子包（新增功能 = 新增子包 + 在 app 接线）
+│   │   ├── app/                  #   启动装配（含端到端回归测试）
+│   │   │   ├── main.go           #     -attach/-cli 分流 → 日志 → 监听 → WebUI → 控制面板
+│   │   │   └── e2e_test.go       #     全链路测试：桥接/鉴权/CLI/多接入/下线/name-os 透传
+│   │   ├── core/                 #   在线机器状态（与传输方式无关）
+│   │   │   ├── bot.go            #     BOT 对象：订阅者集合、输出回放缓冲、心跳、专属日志
+│   │   │   ├── manager.go        #     bots 管理器：在线列表 + 缓存区列表、botID 分配、上下线
+│   │   │   ├── heartbeat.go      #     心跳检测后台协程（每 10s 扫描一次）
+│   │   │   └── execwait.go       #     exec 待回包注册表 + bot 摘要信息
+│   │   ├── uplink/               #   被控端连入侧
+│   │   │   └── listener.go       #     监听端口、HTTP 路由装配、/ws 升级与每台机器的读循环
+│   │   ├── ipc/                  #   本机接入
+│   │   │   ├── server.go         #     本地 IPC 服务：终端窗口接入、令牌鉴权、输入输出桥接
+│   │   │   ├── cli.go            #     /cli 端点：Agent 查询/执行通道
+│   │   │   ├── agentcli.go       #     -cli 模式：list/exec 机器可读命令行
+│   │   │   ├── client.go         #     -attach 模式：独立终端窗口进程
+│   │   │   └── window_*.go       #     Windows 弹窗实现 / 非 Windows 降级
+│   │   ├── term/                 #   控制台原始模式（UTF-8 代码页、VT 透传、Ctrl+] 脱离键）
+│   │   ├── panel/                #   前台 DOS 命令面板（含内嵌终端降级路径）
+│   │   ├── store/                #   本地 SQLite：schema.sql + 账号/机器/会话/审计查询
+│   │   ├── auth/                 #   登录鉴权：PBKDF2 口令 / HS256 令牌 / 密钥 / 鉴权中间件
+│   │   └── webui/                #   浏览器控制台
+│   │       ├── server.go         #     HTTP/WS 接口 + go:embed 装配 + 登录与机器/日志接口
+│   │       ├── admin.go          #     管理员接口：用户管理、机器分级
+│   │       └── assets/           #     内嵌前端：index.html / css / js / vendor(xterm.js)
 │   ├── protocol/message.go       # 两端共用的消息协议（JSON + Base64 字节流）
 │   └── logx/                     # programlog + botslog + 每 bot 的 botlog（终端录像）
 │
 └── user/                         # ── 被控端（用户端 / Client）独立 Go module ──
     ├── go.mod / go.sum           # module remoteassist-user
     ├── cmd/user/main.go          # 薄入口：仅调用 internal/agent.Run()
-    ├── internal/agent/           # 全部业务逻辑（package agent）
-    │   ├── main.go               #   读/建 config → 主循环（连接 → 注册 → shell → 心跳）
-    │   ├── config.go             #   config.json：server_addr / user_id / name（自定义名称）
-    │   ├── conn.go               #   Dial、注册（上报系统与名称）、读循环、Ctrl+C 下线
-    │   ├── sysinfo*.go           #   系统探测：Windows 版本号 / Linux /etc/os-release + 内核
-    │   ├── agentexec.go          #   Agent 一次性命令执行（独立 shell，不碰交互 PTY）
-    │   ├── shell.go / shell_windows.go / shell_other.go  # ConPTY 常驻终端与降级实现
-    │   ├── heartbeat.go          #   周期心跳
-    │   └── console_*.go          #   UTF-8 代码页
+    ├── internal/                 # 按职责拆分的子包
+    │   ├── agent/                #   顶层装配：主循环（连接→注册→shell→心跳）+ 重连
+    │   │   ├── main.go           #     Run()：读/建 config、信号处理、自动重连循环
+    │   │   └── daemon.go         #     daemon 三入口的薄转接（避免 agent ↔ daemon 成环）
+    │   ├── core/                 #   连接与身份
+    │   │   ├── config.go         #     config.json：server_addr / user_id / name
+    │   │   ├── conn.go           #     Client、Dial、注册、读循环、一次性命令分发
+    │   │   └── heartbeat.go      #     周期心跳
+    │   ├── term/                 #   常驻交互式 shell
+    │   │   ├── shell.go          #     Shell 接口、ShellManager、管道降级实现
+    │   │   ├── shell_windows.go  #     Windows ConPTY 优先 + 管道降级
+    │   │   ├── shell_other.go    #     其它类 Unix 管道降级
+    │   │   └── pty_unix.go       #     Linux 真 PTY（/dev/ptmx）
+    │   ├── exec/agentexec.go     #   一次性命令执行（独立进程，不碰交互终端）
+    │   ├── sys/                  #   平台系统能力
+    │   │   ├── sysinfo*.go       #     系统探测：Windows 版本号 / Linux os-release + 内核
+    │   │   ├── console_*.go      #     控制台 UTF-8 代码页
+    │   │   └── signals_*.go      #     退出 / 忽略信号集合
+    │   └── daemon/               #   后台运行：start / stop / status + pid 文件
+    │       ├── daemon.go
+    │       └── daemon_*.go       #     Windows / Unix 平台差异
     └── protocol/message.go       # 与操控端一致的消息协议（两份拷贝，需同步修改）
 ```
 
@@ -253,6 +329,8 @@ helper 进程的当前工作目录/
 ├── logs/
 │   ├── program.log               # 程序运行日志（INFO + ERROR）
 │   ├── agent_endpoint.json       # 本地 CLI/Agent 接入点（地址 + 随机令牌），退出时删除
+│   ├── helper.db                 # 本地 SQLite：账号、机器等级、登录会话、审计日志（WAL 模式）
+│   ├── helper.key                # 会话令牌签名密钥（首次启动生成，权限 0600，敏感！）
 │   ├── bots.log                  # 所有连接过的主机：时间 | botID | 名称 | 系统 | 地址 | botlog
 │   └── botlogs/<botID>.log       # 每台机器的专属日志（完整终端录像 + [AGENT] 审计行）
 └── （CLI 自动向上/向 bin 目录旁查找 logs/agent_endpoint.json）
@@ -335,7 +413,7 @@ GOOS=windows GOARCH=amd64 go build -o user.exe ./cmd/user
 
 ### 4.5 运行测试（可选）
 
-操控端内置端到端回归测试，覆盖「注册握手 → 本地 IPC 终端桥接与令牌鉴权 → 单机单窗互斥 →
+操控端内置端到端回归测试，覆盖「注册握手 → 本地 IPC 终端桥接与令牌鉴权 → 同机多接入（多窗口 / 多浏览器）→
 机器人下线通知 → 心跳 3 周期销毁」全链路：
 
 ```powershell
@@ -353,11 +431,24 @@ go test ./... -v
 |--------|------|--------|------|
 | `ListenAddr` | `helper/internal/app/main.go` 常量 | `":8080"` | 对外监听地址 / 端口；也可用环境变量 `RA_LISTEN`（如 `:18080`）覆盖 |
 | `LogDir` | `helper/internal/app/main.go` 常量 | `"logs"` | 日志目录（相对进程工作目录） |
+| `DBFile` | `helper/internal/app/main.go` 常量 | `"helper.db"` | 本地 SQLite 文件名（放在 `LogDir` 下）：账号、机器等级、会话、审计 |
+| `KeyFile` | `helper/internal/app/main.go` 常量 | `"helper.key"` | 会话令牌签名密钥文件名（放在 `LogDir` 下，权限 `0600`，**敏感勿泄露**） |
 | `HeartbeatInterval` | `helper/protocol/message.go` | `5 * time.Second` | **被控端**发送心跳的间隔 |
 | `HeartbeatPeriod` | `helper/protocol/message.go` | `10 * time.Second` | **操控端**心跳检测周期 |
 | `MaxMissed` | `helper/protocol/message.go` | `3` | 允许连续丢失的周期数，超过即下线 |
 
 改完需**重新编译**。心跳相关常量若修改，必须**同步修改** `user/protocol/message.go` 中的同名常量。
+
+**账号与权限（无需改代码，运行时管理）**
+
+- **首次启动**：程序检测到账号表为空，自动创建管理员 `admin`，随机口令**只在控制台打印一次**，
+  请立即保存。忘记口令时可停止程序、删除 `logs/helper.db` 后重启，重新生成初始管理员
+  （会清空已有账号与审计记录）。
+- **角色**：1 观察者（只读，能旁观终端但输入被丢弃）、2 普通用户（可操作可见范围内的机器）、
+  3 管理员（可在「用户管理」「机器管理」面板里管理账号与机器）。
+- **机器可见等级**：每台机器有一个 `min_role`（默认 2），只有角色值 ≥ 该等级的账号能看到并操作它，
+  由管理员在「机器管理」面板逐台调整。终端长连接每 5 秒复查一次权限，改动即时生效。
+- 登录会话默认有效期 `auth.SessionTTL = 12h`（在 `helper/internal/auth/auth.go` 中调整）。
 
 ### 5.2 被控端（user）
 
@@ -381,16 +472,16 @@ go test ./... -v
 
 | 配置项 | 位置 | 默认值 | 说明 |
 |--------|------|--------|------|
-| `defaultServerAddr` | `user/internal/agent/config.go` | `"127.0.0.1:8080"` | 首次生成 `config.json` 时写入的默认操控端地址；**发布前应改为实际部署地址** |
-| `configPath` | `user/internal/agent/config.go` | `"config.json"` | 配置文件路径（相对进程工作目录） |
+| `defaultServerAddr` | `user/internal/core/config.go` | `"127.0.0.1:8080"` | 首次生成 `config.json` 时写入的默认操控端地址；**发布前应改为实际部署地址** |
+| `configPath` | `user/internal/core/config.go` | `"config.json"` | 配置文件路径（相对进程工作目录） |
 | `retryInterval` | `user/internal/agent/main.go` | `5 * time.Second` | 断线后的自动重连间隔 |
-| ConPTY 初始尺寸 | `user/internal/agent/shell_windows.go` | `120 x 30` | 伪终端默认行列数，接入终端窗口后会被实际窗口尺寸覆盖 |
+| ConPTY 初始尺寸 | `user/internal/term/shell_windows.go` | `120 x 30` | 伪终端默认行列数，接入终端窗口后会被实际窗口尺寸覆盖 |
 
 ---
 
 ## 六、使用流程
 
-### 6.1 快速开始（五步）
+### 6.1 快速开始（六步）
 
 **步骤 1｜编译两端**
 
@@ -409,7 +500,10 @@ cd D:\AAAGitProject\Remote_control\user   ; go build -o ..\bin\user.exe ./cmd/us
 .\bin\helper.exe
 ```
 
-出现 `assist> ` 提示符即表示程序已在后台监听 `8080` 端口。
+出现 `assist> ` 提示符即表示程序已在后台监听 `8080` 端口，同时会打印一行
+「Web 控制台已就绪: http://<本机IP>:8080/」，用浏览器打开即可进入控制台。
+**首次启动**还会额外打印初始管理员 `admin` 的随机口令（**只显示一次，务必立即保存**），
+后续打开控制台需用它登录（见步骤 6）。
 
 **步骤 3｜打通网络（让被控端能连到操控端）**
 
@@ -471,6 +565,27 @@ assist>
 - `Ctrl+C` 发送给远端（中断远方正在运行的程序），`Ctrl+]` 关闭 / 脱离该终端窗口；
 - 脱离后远端 shell 继续存活，再次 `bot [ID]` 仍是原现场（当前目录、环境变量都还在）。
 
+**步骤 6｜（可选）用浏览器控制台**
+
+`helper.exe` 启动后同时是一个 Web 服务。在**同网段的任意设备**（手机、平板、别的电脑）
+用浏览器打开：
+
+```
+http://<操控端 IP>:8080/
+```
+
+即可看到仿桌面 IM 的三栏控制台 —— 最左导航栏选功能，第二列是当前在线的机器列表，
+主区是一整块真终端。点开某台机器即可直接操作，效果与 DOS 窗口完全一致，
+且**多个人可以同时打开同一台机器**。
+
+首次打开会要求登录：初始管理员账号 `admin` 及其随机口令会在**首次启动时打印在控制台**
+且只显示一次，请先保存。登录后可进入管理员的「用户管理」「机器管理」面板新增账号、
+调整权限与机器可见等级。不同账号看到的机器列表可能不同（取决于机器的可见等级）。
+
+> 浏览器控制台与 DOS 面板是同一套内核的两个入口，看的是同一份终端现场。
+> 控制台**已启用登录鉴权，但仍没有 TLS**：口令与 Cookie 在网络上以明文传输，
+> 请只在可信网络内使用，切勿把 8080 直接暴露到公网。
+
 ### 6.2 操控端面板命令
 
 | 命令 | 说明 |
@@ -482,7 +597,7 @@ assist>
 | `bots` | 查看当前已连接机器的基础信息（BOTID / 地址） |
 | `bots -a` | 查看连接过的全部机器（读 `bots.log`） |
 | `bots -l` | 查看在线机器的详细信息（上线时间 / 最近心跳 / 状态 / botlog 文件名） |
-| `bot [botID]` | 为该机器弹出独立终端窗口（`Ctrl+]` 关闭；同机同时只允许一个窗口） |
+| `bot [botID]` | 为该机器弹出独立终端窗口（`Ctrl+]` 关闭；同一台机器可被多个窗口 / 浏览器同时接入） |
 | `exit` | 退出程序（不再监听端口，直至下次启动） |
 
 ### 6.3 被控端退出与重连
@@ -516,15 +631,23 @@ assist>
 4. **进一步收窄权限（进阶）**：可参考 `user/README.md` 第五章，用
    「专用低权限用户（`net user` / `runas`）+ NTFS 权限（`icacls`）+ 软件限制策略（SRP/AppLocker）
    + 沙箱 / 虚拟机」四层手段限制被控端能做什么。
-5. **传输是明文的**：两端通过 **WebSocket 明文**传输命令与回显，**没有任何加密与认证机制**
-   （`CheckOrigin` 放行任意来源，被控端凭 `userID` 自称身份）。
+5. **传输仍是明文的**：两端通过 **WebSocket 明文**传输命令与回显，**没有 TLS 加密**；
+   被控端接入的 `/ws` 也**不校验身份**（`CheckOrigin` 放行任意来源，被控端凭 `userID` 自称身份）。
    因此**只应在受信任的内网或 VPN / 加密隧道中使用**，切勿在公网无保护地暴露 8080 端口。
-6. **及时终止**：协助结束后立即关闭 `user.exe`（任务管理器结束进程），不要长期后台常驻。
-7. **审查与留痕**：操控端会完整记录所有命令与回显（`botlogs/<botID>.log`）。
+6. **浏览器控制台已启用登录鉴权**：WebUI 的 `/api/*` 需要登录，口令以 PBKDF2-HMAC-SHA256
+   （每账号独立随机盐）哈希后存入本地 `helper.db`，会话用 HS256 签名的 JWT 并以
+   `httpOnly` + `SameSite=Strict` Cookie 下发；权限分观察者 / 普通用户 / 管理员三级，
+   机器也有可见等级，改角色 / 改口令 / 停用会立刻让旧令牌失效。
+   但**链路没有 TLS**，口令与 Cookie 仍以明文在网络中传输；请在不可信网络中部署时
+   用防火墙 / 反向代理把控制台限制在可信来源，或改用 SSH 隧道等加密通道访问。
+   另注意 `logs/helper.key`（令牌签名密钥）与 `logs/helper.db` 属敏感文件，已加入 `.gitignore`，
+   请勿泄露或提交到版本库。
+7. **及时终止**：协助结束后立即关闭 `user.exe`（任务管理器结束进程），不要长期后台常驻。
+8. **审查与留痕**：操控端会完整记录所有命令与回显（`botlogs/<botID>.log`）。
    被控方有权要求操控方提供操作日志，或要求其在协助结束后清除相关日志。
-8. **本机 IPC 相对安全，但不等于零风险**：终端窗口 IPC 只监听 `127.0.0.1`、端口随机、
+9. **本机 IPC 相对安全，但不等于零风险**：终端窗口 IPC 只监听 `127.0.0.1`、端口随机、
    令牌每次启动重新生成，本机其它程序无法随意接入；但**本机其它进程若已具备调试 / 注入能力，仍可能被滥用**。
-9. **本程序不做任何隐蔽驻留**：不写注册表、不安装服务、不设开机自启、不留后门。
+10. **本程序不做任何隐蔽驻留**：不写注册表、不安装服务、不设开机自启、不留后门。
    彻底卸载只需结束 `user.exe` 进程并删除 `user.exe` 与 `config.json`。
 
 > 再次强调：**本项目仅供学习研究，禁止用于任何非法用途。**
@@ -548,9 +671,10 @@ A：按顺序排查 ——
 A：确认被控端已运行且已看到「已连接协助者服务器，等待指令。」；确认 `server_addr` 指向正确的
 IP:端口；若被控端日志显示连接中断，检查其出站连接是否被安全软件拦截。
 
-**Q4：`bot [ID]` 提示「终端窗口已经打开了」？**
-A：同一个 `botID` 同时只允许一个终端窗口（避免输入争抢）。请先关闭原窗口，
-或在原窗口按 `Ctrl+]` 脱离后重试。
+**Q4：`bot [ID]` 能否同时开多个窗口 / 多人同时接入同一台机器？**
+A：可以。同一台机器现在**允许多个终端同时接入**（多个 DOS 窗口、多个浏览器页面、
+或两者混用）：远端输出会广播给所有接入者，任何一方的按键都会生效。
+不需要（也无法）独占，直接开就行。但如果多人同时输入，会互相干扰，请自行约定好分工。
 
 **Q5：弹不出新终端窗口？**
 A：非 Windows 平台或 `cmd /c start` 不可用时，程序会自动降级为**当前窗口内的内嵌终端**
@@ -575,6 +699,24 @@ A：见「五、配置项」。端口在 `helper/internal/app/main.go` 的 `List
 A：关闭 `user.exe` / `helper.exe` 进程，删除程序文件、`config.json` 与 `logs/` 目录即可。
 本程序不写注册表、不装服务、不留后门。
 
+**Q10：浏览器打不开控制台 / 打开了看不到机器？**
+A：① 确认访问的是**操控端机器的 IP** 而不是 `127.0.0.1`（除非就在本机）；
+② 确认 `helper.exe` 正在运行，且启动时打印了「Web 控制台已就绪」；
+③ Windows 防火墙需放行 8080 **入站**（见步骤 3 的 `New-NetFirewallRule`）；
+④ 机器列表来自 `/api/bots`，若列表为空说明此刻确实没有被控端在线（浏览器只能看到在线机器）；
+⑤ 终端页需要 WebSocket，若有反向代理请确保已放行 `Upgrade` 头。
+
+**Q11：浏览器控制台需要登录吗？初始口令是什么？**
+A：**需要登录**。首次启动会自动创建管理员 `admin`，随机口令**只在控制台打印一次**，请立即保存；
+之后可在「用户管理」面板新增账号、改口令、调整角色。忘记口令时可停止程序、删除
+`logs/helper.db` 后重启，重新生成初始管理员（会清空已有账号与审计记录）。
+控制台目前已启用鉴权但**仍不做 TLS**，请只在可信网络内使用。
+
+**Q12：登录后打字没反应 / 看不到某台机器？**
+A：两种情况都跟**角色与机器可见等级**有关：观察者（角色 1）是只读身份，终端可旁观但输入会被丢弃；
+某台机器的 `min_role` 高于你的角色时，它对你就不可见、也无法操作。
+只有**管理员**能在「机器管理」里调整机器等级、在「用户管理」里调整账号角色。
+
 ---
 
 ## 九、已知事项
@@ -584,7 +726,17 @@ A：关闭 `user.exe` / `helper.exe` 进程，删除程序文件、`config.json`
 - `helper/go.mod` 中 `gorilla/websocket` 被标记为 `// indirect`，属 Go 工具链的标注细节，
   不影响编译与运行。
 - 项目当前**未包含开源许可证文件（LICENSE）**。若需对外分发或开源，请自行补充合适的许可证。
-- 本项目**未实现加密与身份认证**，仅适合学习与受信任网络内的实验，请勿直接用于生产环境。
+- 本项目**未实现传输加密**（无 TLS）；被控端接入的 `/ws` 也**不做身份认证**，
+  仅适合学习与受信任网络内的实验，请勿直接用于生产环境。
+- **浏览器控制台（WebUI）已支持登录鉴权与三级角色**（观察者 / 普通用户 / 管理员），
+  账号、机器等级、会话与审计日志存入本地 SQLite（`logs/helper.db`）；
+  但**仍不做 TLS**，与 `/ws` 共用一个明文端口，口令与 Cookie 在网络上明文传输。
+- 会话令牌用自实现的 HS256 JWT 签名，签名密钥存于 `logs/helper.key`（权限 `0600`）；
+  该文件与 `helper.db` 均为敏感文件，已加入 `.gitignore`，请勿泄露或提交到版本库。
+- WebUI 前端（含 xterm.js）通过 `go:embed` 内嵌进 `helper.exe`，
+  **新增/修改前端文件后必须重新编译**才会生效，不存在「改完刷新页面即可」的运行时加载。
+- 同一台机器支持**多接入者**（多个 DOS 窗口 / 多个浏览器页面）：输出广播、输入共用，
+  多人同时输入时会互相干扰，属于预期行为。
 
 ---
 
