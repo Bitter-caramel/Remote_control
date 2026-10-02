@@ -34,3 +34,7 @@ config.json
 *.db
 *.db-wal
 *.db-shm
+
+# ---------- 4. 本地工具与编辑器目录：不上传 ----------
+# AI IDE（Trae 等）在本地生成的会话记录与方案草稿，如 .trae/documents/
+.trae/
