@@ -109,8 +109,9 @@ func (a *Server) handle(upgrader websocket.Upgrader) http.HandlerFunc {
 			conn.Close()
 			return
 		}
-		out, cancel := b.Subscribe()
-		defer cancel()
+		sub := b.Subscribe()
+		defer sub.Close()
+		out := sub.Out
 		b.Log().Sys("终端窗口接入")
 
 		done := make(chan struct{})

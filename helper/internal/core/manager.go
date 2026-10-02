@@ -22,6 +22,8 @@ type Manager struct {
 	execMu   sync.Mutex
 	execWait map[string]execWaiter // exec 请求待回包（MsgID→等待者）
 
+	events *EventLog // 占用/排队/释放的播报历史（内存环形缓冲，不落库）
+
 	logDir  string
 	prog    *logx.ProgramLog
 	botslog *logx.BotsLog
@@ -32,11 +34,15 @@ func NewManager(logDir string, prog *logx.ProgramLog, botslog *logx.BotsLog) *Ma
 		bots:     make(map[string]*BOT),
 		buffered: make(map[string]*BOT),
 		execWait: make(map[string]execWaiter),
+		events:   NewEventLog(eventRingSize),
 		logDir:   logDir,
 		prog:     prog,
 		botslog:  botslog,
 	}
 }
+
+// Events 播报历史（占用/排队/释放）
+func (m *Manager) Events() *EventLog { return m.events }
 
 // LogDir 日志目录（program.log / bots.log / botlogs/<botID>.log 所在目录）
 func (m *Manager) LogDir() string { return m.logDir }
@@ -72,10 +78,12 @@ func (m *Manager) Register(b *BOT) {
 	m.bots[b.ID] = b
 	m.mu.Unlock()
 
+	b.SetEventLog(m.events) // 注入播报历史（此后该机器的占用/排队都记账）
+
 	if old != nil {
 		old.Conn.Close()
 		old.Log().Sys("被同 ID 的新连接取代")
-		old.CloseSubs()
+		old.CloseSubs("连接被取代")
 		old.Log().Close()
 	}
 	m.botslog.Add(b.ID, b.NameOrDash(), b.OSOrDash(), b.Addr()) // botslog 记录连接过的主机及对应 botlog 文件名
@@ -94,7 +102,7 @@ func (m *Manager) Remove(id, reason string) {
 	b.Conn.Close()
 	m.failExecsOfBot(id) // 唤醒等待该 bot 执行结果的 CLI
 	b.Log().Sys("下线: %s", reason)
-	b.CloseSubs() // 关闭订阅通道，桥接协程据此自然退出
+	b.CloseSubs("机器离线") // 关闭订阅通道，桥接协程据此自然退出
 	b.Log().Close()
 	fmt.Printf("[%s] 机器下线: %s | 名称: %s | 地址: %s — %s\n",
 		time.Now().Format("15:04:05"), id, b.NameOrDash(), b.Addr(), reason)

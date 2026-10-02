@@ -37,8 +37,9 @@ func runBotPanel(out io.Writer, sc *bufio.Scanner, m *core.Manager, id string) {
 
 	// 通知远端终端尺寸，并订阅输出（先收到一段历史回放）
 	_ = b.Send(&protocol.Message{Type: protocol.TypeResize, Cols: cols, Rows: rows})
-	stream, cancel := b.Subscribe()
-	defer cancel()
+	sub := b.Subscribe()
+	defer sub.Close()
+	stream := sub.Out
 
 	var stopped atomic.Bool
 	detach := make(chan struct{})

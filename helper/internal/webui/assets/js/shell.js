@@ -91,6 +91,9 @@
     foot.append(userBtn);
     rail.append(foot);
 
+    /* 底部面板（自身也有注册表，外壳同样不认识具体标签） */
+    if (UI.dock) UI.dock.start();
+
     var first = visiblePanels()[0];
     activate(location.hash.slice(1) || (first && first.id));
   };

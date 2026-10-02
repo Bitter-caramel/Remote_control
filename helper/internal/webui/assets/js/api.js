@@ -44,6 +44,15 @@
       request("GET", "/api/logs?kind=" + encodeURIComponent(kind) +
         (id ? "&id=" + encodeURIComponent(id) : "")),
 
+    /* 占用/排队/释放的播报历史（服务端已按机器等级过滤） */
+    events: (limit) =>
+      request("GET", "/api/events" + (limit ? "?limit=" + encodeURIComponent(limit) : "")),
+    /* 当前用户自己正在占用/排队的机器 */
+    reservations: () => request("GET", "/api/reservations"),
+    /* 主动放弃某台机器的控制权（占用者让位 / 排队者退出队列） */
+    release: (botID) =>
+      request("POST", "/api/bots/" + encodeURIComponent(botID) + "/release", {}),
+
     /* 机器管理（管理员） */
     botsAll: () => request("GET", "/api/bots/all"),
     setBotMinRole: (id, minRole) =>

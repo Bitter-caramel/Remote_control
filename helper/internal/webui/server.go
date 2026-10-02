@@ -15,9 +15,12 @@ package webui
 //	POST /api/login        登录
 //	POST /api/logout       登出（撤销当前会话）
 //	GET  /api/me           当前身份
-//	GET  /api/bots         在线机器列表（按角色过滤）
+//	GET  /api/bots         在线机器列表（按角色过滤，含占用/排队概况）
 //	GET  /api/logs         日志读取（program / bots / botlog）
-//	/api/term              终端桥接（WebSocket，与 /attach 等价的浏览器版本）
+//	GET  /api/events       占用/排队/释放的播报历史（按机器等级过滤）
+//	GET  /api/reservations 当前用户自己正在占用/排队的机器
+//	POST /api/bots/{id}/release 主动放弃该机器的控制权
+//	/api/term              终端桥接（WebSocket，独占控制 + 排队）
 //	见 admin.go：/api/users*、/api/bots/all、机器分级与备注
 
 import (
@@ -30,6 +33,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -75,6 +79,11 @@ func Register(mux *http.ServeMux, m *core.Manager, prog *logx.ProgramLog,
 	mux.Handle("GET /api/bots", a.RequireAuth(http.HandlerFunc(s.handleBots)))
 	mux.Handle("GET /api/logs", a.RequireAuth(http.HandlerFunc(s.handleLogs)))
 	mux.Handle("/api/term", a.RequireAuth(http.HandlerFunc(s.handleTerm)))
+
+	// 占用/预定/播报
+	mux.Handle("GET /api/events", a.RequireAuth(http.HandlerFunc(s.handleEvents)))
+	mux.Handle("GET /api/reservations", a.RequireAuth(http.HandlerFunc(s.handleReservations)))
+	mux.Handle("POST /api/bots/{id}/release", a.RequireAuth(http.HandlerFunc(s.handleBotRelease)))
 
 	// 机器管理（仅管理员）
 	mux.Handle("GET /api/bots/all", a.RequireAdmin(http.HandlerFunc(s.handleBotsAll)))
@@ -267,23 +276,85 @@ func decodeBody(w http.ResponseWriter, r *http.Request, v any) bool {
 
 // wsInput 浏览器 → 服务端
 type wsInput struct {
-	Type string `json:"type"` // input | resize
+	Type string `json:"type"` // input | resize | idle_answer
 	Data string `json:"data"` // input：base64 编码的按键字节
 	Cols int    `json:"cols"`
 	Rows int    `json:"rows"`
+	Keep bool   `json:"keep"` // idle_answer：true = 下线，false = 继续
 }
 
-// wsOutput 服务端 → 浏览器
+// wsOutput 服务端 → 浏览器。
+// Type 除 ready/output/bye/error 外，还会直接落 core 的控制消息类型
+// （granted / queued / idle_prompt / revoked），前端按同一字段分派。
 type wsOutput struct {
-	Type string `json:"type"` // output | bye | error
-	Data string `json:"data"`
+	Type     string `json:"type"`
+	Data     string `json:"data"` // output：base64 的终端字节
+	Text     string `json:"text"`
+	Mode     string `json:"mode"`     // ready：operator | waiting | observer
+	Queue    int    `json:"queue"`    // 排队位次（1 起）
+	Holder   string `json:"holder"`   // 当前占用者展示名
+	Deadline int64  `json:"deadline"` // idle_prompt：截止时间（Unix 秒）
+}
+
+// authSubscriber 把登录身份转成终端接入者身份：
+// 观察者（角色 1）只读旁观，既不占用也不排队。
+func authSubscriber(id *auth.Identity) core.Subscriber {
+	display := id.DisplayName
+	if display == "" {
+		display = id.Username
+	}
+	return core.Subscriber{
+		Kind:     core.SubBrowser,
+		UserID:   id.UserID,
+		Username: id.Username,
+		Display:  display,
+		ReadOnly: !id.CanOperate(),
+	}
 }
 
 // recheckEvery 每多少个心跳周期复查一次登录态与权限（1 秒/周期）
 const recheckEvery = 5
 
-// handleTerm 浏览器终端桥接：与 ipc 的 /attach 走同一套 core 订阅广播，
-// 因此多个浏览器可以同时看同一台机器、也都能输入（观察者除外）。
+// byeText 订阅通道被关闭时的结束语：
+// 机器下线与「控制权被释放/放弃」都会走到这里，用是否有该机器区分。
+func (s *Server) byeText(botID string) string {
+	if s.m.Get(botID) == nil {
+		return "该机器已下线"
+	}
+	return "连接已结束"
+}
+
+// ctrlOutput 把 core 的控制消息转成下发给浏览器的消息
+func ctrlOutput(cm core.ControlMsg) wsOutput {
+	return wsOutput{
+		Type:     cm.Type,
+		Text:     cm.Text,
+		Queue:    cm.Queue,
+		Holder:   cm.Holder,
+		Deadline: cm.Deadline,
+	}
+}
+
+// flushCtrl 把缓冲里还剩的控制消息发完。
+// 被收回控制权时 core 会「先投递 revoked、再关闭输出通道」，
+// 两者同时就绪时 select 是随机选的，所以关通道后要补发一次，免得用户看不到被下线的原因。
+func flushCtrl(sub *core.Subscription, send func(wsOutput) error) {
+	for {
+		select {
+		case cm := <-sub.Ctrl:
+			if err := send(ctrlOutput(cm)); err != nil {
+				return
+			}
+		default:
+			return
+		}
+	}
+}
+
+// handleTerm 浏览器终端桥接：与 ipc 的 /attach 走同一套 core 订阅广播。
+//
+// 控制权是独占的：空闲时接入即成为占用者，被占用则按 FIFO 排队；
+// 排队者与观察者都能看到终端画面，但输入被服务端丢弃。
 //
 // 长连接不会自动重放鉴权，所以这里周期性复查：
 // 会话被撤销（登出/被踢/停用/改密码）或权限降到看不到这台机器时，立即断开。
@@ -316,16 +387,28 @@ func (s *Server) handleTerm(w http.ResponseWriter, r *http.Request) {
 		return conn.WriteJSON(msg)
 	}
 
-	out, cancel := b.Subscribe()
-	defer cancel()
+	sub := b.SubscribeAs(authSubscriber(id))
+	defer sub.Close()
 	b.Log().Sys("Web 控制台接入 (%s)", id.Username)
 	s.prog.Info("Web 控制台接入 bot %s，账号 %s（%s）",
 		botID, id.Username, store.RoleName(id.Role))
 
+	// 控制权会随他人释放、闲置超时而变化，这里保存当前状态供上行输入判定
+	mode := atomic.Int32{}
+	mode.Store(int32(sub.Mode))
+	if err := send(wsOutput{
+		Type:   "ready",
+		Mode:   sub.Mode.Name(),
+		Queue:  sub.Queue,
+		Holder: sub.Holder,
+	}); err != nil {
+		return
+	}
+
 	readDone := make(chan struct{})
 
-	// 浏览器 → bot：按键输入 / 尺寸变化。
-	// 观察者（角色 1）一律丢弃：能看不能动是这一档的全部含义。
+	// 浏览器 → bot：按键输入 / 尺寸变化 / 闲置询问应答。
+	// 观察者（角色 1）一律丢弃；排队者同样丢弃（能看不能动）。
 	go func() {
 		defer close(readDone)
 		for {
@@ -338,6 +421,9 @@ func (s *Server) handleTerm(w http.ResponseWriter, r *http.Request) {
 			}
 			switch in.Type {
 			case "input":
+				if core.ControlMode(mode.Load()) != core.ModeOperator {
+					continue
+				}
 				p, err := protocol.DecodeB64(in.Data)
 				if err != nil {
 					continue
@@ -346,9 +432,18 @@ func (s *Server) handleTerm(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 			case "resize":
+				if core.ControlMode(mode.Load()) != core.ModeOperator {
+					continue
+				}
 				if in.Cols > 0 && in.Rows > 0 {
 					_ = b.Send(&protocol.Message{Type: protocol.TypeResize, Cols: in.Cols, Rows: in.Rows})
 				}
+			case "idle_answer":
+				// 点「是」会立即让位；点「否」重置计时，重新计一个 IdleTimeout
+				if core.ControlMode(mode.Load()) != core.ModeOperator {
+					continue
+				}
+				sub.AnswerIdle(in.Keep)
 			}
 		}
 	}()
@@ -361,9 +456,25 @@ func (s *Server) handleTerm(w http.ResponseWriter, r *http.Request) {
 		case <-readDone:
 			b.Log().Sys("Web 控制台断开")
 			return
-		case p, ok := <-out:
+		case cm, ok := <-sub.Ctrl:
 			if !ok {
-				_ = send(wsOutput{Type: "bye", Data: "该机器已下线"})
+				_ = send(wsOutput{Type: "bye", Data: s.byeText(b.ID)})
+				return
+			}
+			// 控制权变化：被让位才可写，被收回立刻转只读
+			switch cm.Type {
+			case core.CtrlGranted:
+				mode.Store(int32(core.ModeOperator))
+			case core.CtrlRevoked:
+				mode.Store(int32(core.ModeObserver))
+			}
+			if err := send(ctrlOutput(cm)); err != nil {
+				return
+			}
+		case p, ok := <-sub.Out:
+			if !ok {
+				flushCtrl(sub, send) // 关通道前可能还压着一条控制消息
+				_ = send(wsOutput{Type: "bye", Data: s.byeText(b.ID)})
 				return
 			}
 			if err := send(wsOutput{Type: "output", Data: protocol.EncodeB64(p)}); err != nil {

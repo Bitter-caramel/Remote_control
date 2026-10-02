@@ -1,48 +1,59 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>RemoteAssist 控制台</title>
-<link rel="stylesheet" href="/vendor/xterm.css">
-<link rel="stylesheet" href="/css/app.css">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RemoteAssist 控制台</title>
+  <link rel="stylesheet" href="/vendor/xterm.css">
+  <link rel="stylesheet" href="/css/app.css">
 </head>
+
 <body>
-<div id="app">
-  <nav id="rail"></nav>
-  <aside id="side">
-    <div id="side-head"></div>
-    <div id="side-body"></div>
-  </aside>
-  <main id="stage"></main>
-</div>
+  <div id="app">
+    <nav id="rail"></nav>
+    <aside id="side">
+      <div id="side-head"></div>
+      <div id="side-body"></div>
+    </aside>
+    <main id="stage"></main>
+    <!-- 底部面板（仿 VSCode panel）：内部 tab 由 dock 注册表生成，默认收起 -->
+    <section id="dock" class="collapsed">
+      <div id="dock-tabs"></div>
+      <div id="dock-body"></div>
+    </section>
+  </div>
 
-<!-- 登录卡片：未登录时不构建任何功能面板，只显示它 -->
-<div id="login" hidden>
-  <form id="login-card">
-    <div class="login-title">RemoteAssist 控制台</div>
-    <label class="field">
-      <span>账号</span>
-      <input id="login-user" name="username" autocomplete="username" autofocus required>
-    </label>
-    <label class="field">
-      <span>密码</span>
-      <input id="login-pass" name="password" type="password" autocomplete="current-password" required>
-    </label>
-    <div id="login-msg" class="login-msg"></div>
-    <button id="login-submit" type="submit">登录</button>
-  </form>
-</div>
+  <!-- 登录卡片：未登录时不构建任何功能面板，只显示它 -->
+  <div id="login" hidden>
+    <form id="login-card">
+      <div class="login-title">RemoteAssist 控制台</div>
+      <label class="field">
+        <span>账号</span>
+        <input id="login-user" name="username" autocomplete="username" autofocus required>
+      </label>
+      <label class="field">
+        <span>密码</span>
+        <input id="login-pass" name="password" type="password" autocomplete="current-password" required>
+      </label>
+      <div id="login-msg" class="login-msg"></div>
+      <button id="login-submit" type="submit">登录</button>
+    </form>
+  </div>
 
-<script src="/vendor/xterm.js"></script>
-<script src="/vendor/addon-fit.js"></script>
-<script src="/js/registry.js"></script>
-<script src="/js/api.js"></script>
-<script src="/js/session.js"></script>
-<script src="/js/panel-term.js"></script>
-<script src="/js/panel-logs.js"></script>
-<script src="/js/panel-users.js"></script>
-<script src="/js/panel-botadmin.js"></script>
-<script src="/js/shell.js"></script>
+  <script src="/vendor/xterm.js"></script>
+  <script src="/vendor/addon-fit.js"></script>
+  <script src="/js/registry.js"></script>
+  <script src="/js/api.js"></script>
+  <script src="/js/session.js"></script>
+  <script src="/js/dock.js"></script>
+  <script src="/js/dock-reservations.js"></script>
+  <script src="/js/panel-term.js"></script>
+  <script src="/js/panel-logs.js"></script>
+  <script src="/js/panel-events.js"></script>
+  <script src="/js/panel-users.js"></script>
+  <script src="/js/panel-botadmin.js"></script>
+  <script src="/js/shell.js"></script>
 </body>
+
 </html>
