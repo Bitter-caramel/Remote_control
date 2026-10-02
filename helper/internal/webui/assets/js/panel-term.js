@@ -129,12 +129,19 @@
       }
     }
 
-    term.onResize(function (size) {
-      if (mode !== "operator") return; // 尺寸只有占用者能改
+    /* 把本终端的行列数同步给远端 PTY（尺寸只有占用者能改）。
+       必须做：远端 ConPTY 按自己记录的行数清屏，两边不一致时 cls 只会清掉
+       它已知的那几行，浏览器比远端高的话就会留下「清不掉的下半屏」。
+       除了尺寸变化，接管控制权时也要补发一次——接入时会先 fit 再收到 ready，
+       那一次 onResize 因为还不是占用者被丢掉了，否则远端会一直停在初始尺寸。 */
+    function sendSize() {
+      if (mode !== "operator") return;
       if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: "resize", cols: size.cols, rows: size.rows }));
+        ws.send(JSON.stringify({ type: "resize", cols: term.cols, rows: term.rows }));
       }
-    });
+    }
+
+    term.onResize(sendSize);
 
     term.onData(function (data) {
       /* 只读与排队者的按键不发送；服务端还会再拦一道 */
@@ -179,6 +186,7 @@
             break;
           case "ready":
             setMode(msg.mode, msg.queue);
+            sendSize(); // 占用者接入时把尺寸同步过去，远端才会按本终端的行数清屏
             if (mode === "operator") term.focus();
             break;
           case "queued":
@@ -189,6 +197,7 @@
             setMode("operator");
             hideBanner();
             showBanner(msg.text || "轮到你了，已获得控制权", "ok", []);
+            sendSize(); // 换人操作时按新占用者的终端尺寸重设远端 PTY
             term.focus();
             break;
           case "revoked":
