@@ -1,11 +1,12 @@
 package core
 
-// occupancy：每台 bot 的「占用 + 预定排队」模型。
+// occupancy：订阅者身份与输入外观的最小类型。
 //
-// 一台机器同一时刻只允许一个「占用者」输入，其余接入者按 FIFO 排队；
-// 观察者（Web 角色 1）只读旁听，既不占用也不排队。三类接入者都能收到终端输出。
-
-import "time"
+// 旧模型是「一台机器一个占用者 + FIFO 排队 + 输出广播给所有人」，已废弃：
+// 现在每台机器上可同时存在多条互相隔离的操作上下文（见 context.go），
+// 每条上下文各自只有一个「输入持有者」，其余接入者只读。
+//
+// 本文件只保留与「人 / 通道」有关的类型；路由、段缓冲与输入锁都在 context.go。
 
 // SubKind 订阅者的接入方式
 type SubKind int
@@ -15,25 +16,20 @@ const (
 	SubBrowser                // 浏览器控制台（有账号）
 )
 
-// ControlMode 订阅者对该机器的控制权状态
+// ControlMode 订阅者相对某条上下文的输入能力
 type ControlMode int
 
 const (
-	ModeObserver ControlMode = iota // 只读旁观，不入队
-	ModeWaiting                     // 已排队，等前面的人释放
-	ModeOperator                    // 当前占用者，可以输入
+	ModeObserver ControlMode = iota // 只读：不持有输入锁
+	ModeOperator                    // 持有输入锁，可以输入
 )
 
-// Name 控制权状态的对外字符串（operator / waiting / observer）
+// Name 控制权状态的对外字符串（operator / observer）
 func (m ControlMode) Name() string {
-	switch m {
-	case ModeOperator:
+	if m == ModeOperator {
 		return "operator"
-	case ModeWaiting:
-		return "waiting"
-	default:
-		return "observer"
 	}
+	return "observer"
 }
 
 // Subscriber 一个终端接入者的身份
@@ -42,60 +38,30 @@ type Subscriber struct {
 	UserID   int64
 	Username string // 去重键；本机终端为空
 	Display  string // 展示名；本机终端固定「本机终端」
-	ReadOnly bool   // true = 只读旁观（Web 观察者），既不占用也不排队
 }
 
-// same 判断两个订阅者是否属于同一个人：浏览器按账号，本机终端不区分具体窗口。
-func (s Subscriber) same(o Subscriber) bool {
-	if s.Kind != o.Kind {
-		return false
-	}
-	if s.Kind == SubLocal {
-		return true
-	}
-	return s.UserID != 0 && s.UserID == o.UserID
-}
-
-// 控制消息类型（只推给单个订阅者，不广播）
+// 订阅模式：由 webui 查库判定后传入，core 本身不做权限判定。
+// 只有权限判定（owner / 授权 / 默认可看）通过的人才会走到订阅这一步。
 const (
-	CtrlGranted    = "granted"     // 轮到你，已获得控制权
-	CtrlQueued     = "queued"      // 已被他人占用，已在队列中
-	CtrlIdlePrompt = "idle_prompt" // 长时间无操作，询问是否下线
-	CtrlRevoked    = "revoked"     // 控制权已被收回
+	SubOwner   = "owner"   // 上下文所有者：实时输出，默认持有输入锁
+	SubOperate = "operate" // 被授权接续：实时输出，获得输入锁
+	SubWatch   = "watch"   // 被授权观看：只读，按段同步
+)
+
+// realtime 该模式是否实时接收输出（否则按「段」同步）
+func realtime(role string) bool { return role == SubOwner || role == SubOperate }
+
+// 控制消息类型（只推给该上下文下的订阅者）
+const (
+	CtrlGranted = "granted" // 输入权已移交给你
+	CtrlRevoked = "revoked" // 输入权被收回或被他人接续，你转为只读
+	CtrlOpened  = "opened"  // 被控端 shell 已就绪
+	CtrlFailed  = "failed"  // 上下文开启失败（Text 为原因，如超出配额）
 )
 
 // ControlMsg 定向推送给单个订阅者的控制消息
 type ControlMsg struct {
-	Type     string `json:"type"`
-	Text     string `json:"text"`
-	Queue    int    `json:"queue"`    // 排队位次（1 起），非排队为 0
-	Holder   string `json:"holder"`   // 当前占用者的展示名
-	Deadline int64  `json:"deadline"` // idle_prompt 的截止时间（Unix 秒），其余为 0
-}
-
-// Occupancy 一台机器的占用概况（随机器列表下发给前端）
-type Occupancy struct {
-	Occupied  bool     `json:"occupied"`
-	Text      string   `json:"text"` // 无人占用 / 张三 占用 / 张三、李四 占用 / 张三 等 3 人占用
-	Occupants []string `json:"occupants"`
-	Observers int      `json:"observers"` // 只读旁观人数
-	Queue     int      `json:"queue"`     // 排队人数
-}
-
-// Reservation 当前用户在某一台机器上的预定情况
-type Reservation struct {
-	BotID        string `json:"bot_id"`
-	BotName      string `json:"bot_name"`
-	Mode         string `json:"mode"` // operator | waiting
-	Queue        int    `json:"queue"`
-	Holder       string `json:"holder"`
-	IdleDeadline int64  `json:"idle_deadline"` // 0 = 没有正在进行的下线询问
-}
-
-// deadlineUnix 把询问截止时间转成下发给前端的 Unix 秒（零值给 0）
-func deadlineUnix(t time.Time) int64 {
-	if t.IsZero() {
-		return 0
-	}
-	return t.Unix()
+	Type   string `json:"type"`
+	Text   string `json:"text"`
+	Holder string `json:"holder"` // 当前输入持有者的展示名
 }

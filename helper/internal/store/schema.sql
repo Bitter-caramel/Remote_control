@@ -1,6 +1,6 @@
--- RemoteAssist 协助者端本地数据库结构（schema_version = 1）
+-- RemoteAssist 协助者端本地数据库结构（schema_version = 2）
 -- 由 store.Open 通过 go:embed 内嵌执行；所有语句均为幂等（IF NOT EXISTS），
--- 因此重复启动不会破坏已有数据。
+-- 因此重复启动不会破坏已有数据，老库升级也无需版本分支。
 
 CREATE TABLE IF NOT EXISTS meta (
     key   TEXT PRIMARY KEY,
@@ -69,3 +69,70 @@ CREATE INDEX IF NOT EXISTS idx_sessions_user    ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
 CREATE INDEX IF NOT EXISTS idx_audit_at         ON audit_log(at);
 CREATE INDEX IF NOT EXISTS idx_users_role       ON users(role);
+
+-- ---------------------------------------------------------------------------
+-- 操作上下文（Ctx）：一个用户在一台 bot 上的一条独立操作线。
+-- 关系是「用户ID → botID → 操作上下文」；被控端为每条上下文起一个独立 shell。
+-- ---------------------------------------------------------------------------
+
+-- 上下文本体：1:1 绑定 (bot, owner)。
+-- id 由 store.CtxID(botID, ownerID) 确定性生成，与协议 ctxID、内存态三处保持一致。
+-- cwd 是该上下文最后一次命令结束时的工作目录，bot 重启后据此重建现场。
+CREATE TABLE IF NOT EXISTS contexts (
+    id             TEXT PRIMARY KEY,
+    bot_id         TEXT    NOT NULL,
+    owner_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    title          TEXT    NOT NULL DEFAULT '',
+    cwd            TEXT    NOT NULL DEFAULT '',
+    created_at     INTEGER NOT NULL,
+    updated_at     INTEGER NOT NULL,
+    last_active_at INTEGER NOT NULL DEFAULT 0,
+    UNIQUE(bot_id, owner_id)
+);
+
+-- 已生效的观看/接续授权：长期有效，直到 owner 主动撤销。
+-- mode：watch（只读观看）| operate（可接续输入）
+CREATE TABLE IF NOT EXISTS context_grants (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    context_id  TEXT    NOT NULL REFERENCES contexts(id) ON DELETE CASCADE,
+    grantee_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    mode        TEXT    NOT NULL,
+    granted_at  INTEGER NOT NULL,
+    UNIQUE(context_id, grantee_id)
+);
+
+-- 申请记录：同意后转成 grant，但申请历史保留（state 不可回退）。
+CREATE TABLE IF NOT EXISTS context_requests (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    context_id   TEXT    NOT NULL REFERENCES contexts(id) ON DELETE CASCADE,
+    requester_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    mode         TEXT    NOT NULL,
+    state        TEXT    NOT NULL DEFAULT 'pending', -- pending | accepted | rejected
+    created_at   INTEGER NOT NULL,
+    answered_at  INTEGER NOT NULL DEFAULT 0
+);
+
+-- 段（一条命令跑完）的落库记录：用于重连后恢复 cwd。
+-- 注意：只记「段序号 + 当时的工作目录」，不存命令文本，
+-- 因此重连可以恢复现场位置，但无法重放历史命令（与设计约定一致）。
+CREATE TABLE IF NOT EXISTS context_commands (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    context_id TEXT    NOT NULL REFERENCES contexts(id) ON DELETE CASCADE,
+    seq        INTEGER NOT NULL,
+    cwd        TEXT    NOT NULL DEFAULT '',
+    at         INTEGER NOT NULL
+);
+
+-- 用户级偏好。单独建表而不是给 users 加列：SQLite 没有
+-- ALTER TABLE ... ADD COLUMN IF NOT EXISTS，独立幂等建表最干净。
+-- watch_default = 1：该用户所有上下文默认对所有人开放只读。
+CREATE TABLE IF NOT EXISTS user_prefs (
+    user_id       INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    watch_default INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_contexts_owner   ON contexts(owner_id);
+CREATE INDEX IF NOT EXISTS idx_contexts_bot     ON contexts(bot_id);
+CREATE INDEX IF NOT EXISTS idx_grants_grantee   ON context_grants(grantee_id);
+CREATE INDEX IF NOT EXISTS idx_requests_context ON context_requests(context_id);
+CREATE INDEX IF NOT EXISTS idx_ctx_commands_ctx ON context_commands(context_id);

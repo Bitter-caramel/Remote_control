@@ -1,8 +1,8 @@
 package core
 
-// events：占用 / 排队 / 释放的播报历史。
+// events：接入 / 离开操作上下文、取得 / 释放输入权的播报历史。
 //
-// 这些事件只在「有人接入或离开终端、排队发生变动」时产生，频次极低，
+// 这些事件只在「有人接入或离开终端、输入权发生变动」时产生，频次极低，
 // 因此用内存定长环形缓冲即可，不落库（避免为它做表结构迁移与每次连接写盘）。
 // 定长环保证内存上界、O(1) 追加，也免去 GC 抖动。
 
@@ -18,9 +18,8 @@ const eventRingSize = 500
 type EventKind string
 
 const (
-	EventOccupy  EventKind = "occupy"  // 开始占用
-	EventRelease EventKind = "release" // 释放控制权
-	EventQueue   EventKind = "queue"   // 加入排队
+	EventOccupy  EventKind = "occupy"  // 接入操作上下文 / 取得输入权
+	EventRelease EventKind = "release" // 离开操作上下文 / 释放输入权
 )
 
 // Event 一条播报记录。BotName 与 Actor 都是事件发生时的快照，

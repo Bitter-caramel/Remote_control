@@ -2,7 +2,6 @@ package core
 
 import (
 	"errors"
-	"fmt"
 	"sync"
 	"time"
 
@@ -16,13 +15,13 @@ import (
 
 // Client 到协助者服务器的连接，负责注册身份、转发终端输入输出
 type Client struct {
-	cfg   *Config
-	Conn  *websocket.Conn
-	wmu   sync.Mutex // 保护 Conn 的并发写（shell 输出、心跳协程）
-	Shell *term.ShellManager
+	cfg      *Config
+	Conn     *websocket.Conn
+	wmu      sync.Mutex           // 保护 Conn 的并发写（终端输出、心跳协程）
+	Sessions *term.SessionManager // 进程级多操作上下文（跨重连保活，由 agent 注入）
 }
 
-// NewClient 组装一个到协助者服务器的连接（交互 shell 在注册成功后由外层挂载到 Shell）
+// NewClient 组装一个到协助者服务器的连接（多上下文管理器由外层注入 Sessions）
 func NewClient(cfg *Config, conn *websocket.Conn) *Client {
 	return &Client{cfg: cfg, Conn: conn}
 }
@@ -67,8 +66,10 @@ func (c *Client) Register() (string, error) {
 	return ack.UserID, nil
 }
 
-// ReadLoop 阻塞式读循环：接收协助者的键盘输入写入本机 shell，
-// shell 的输出由 ShellManager.Pump 协程持续回传，直到连接断开。
+// ReadLoop 阻塞式读循环：把协助者的消息按 CtxID 分发到对应操作上下文的 shell，
+// 各上下文的输出由 SessionManager.Pump 协程持续回传，直到连接断开。
+//
+// 未知 / 缺失 CtxID 的终端类消息直接丢弃：上下文由服务端先发 TypeCtxOpen 建立。
 func (c *Client) ReadLoop() {
 	for {
 		var msg protocol.Message
@@ -76,25 +77,18 @@ func (c *Client) ReadLoop() {
 			return
 		}
 		switch msg.Type {
+		case protocol.TypeCtxOpen:
+			c.Sessions.Open(msg.CtxID, msg.Cols, msg.Rows, msg.Cwd)
 		case protocol.TypeInput:
 			p, err := protocol.DecodeB64(msg.Data)
 			if err != nil {
 				continue
 			}
-			if err := c.Shell.Write(p); err != nil {
-				// shell 启动失败时，把原因回显到远端终端
-				notice := fmt.Sprintf("\r\n[启动 shell 失败: %v]\r\n", err)
-				_ = c.Send(&protocol.Message{
-					Type: protocol.TypeOutput,
-					Data: protocol.EncodeB64([]byte(notice)),
-				})
-			}
+			_ = c.Sessions.Write(msg.CtxID, p)
 		case protocol.TypeResize:
-			if msg.Cols > 0 && msg.Rows > 0 {
-				c.Shell.Resize(msg.Cols, msg.Rows)
-			}
+			c.Sessions.Resize(msg.CtxID, msg.Cols, msg.Rows)
 		case protocol.TypeExec:
-			// Agent/CLI 一次性命令：独立进程执行，不碰交互终端
+			// Agent/CLI 一次性命令：独立进程执行，不碰交互终端，与上下文无关
 			cmdBytes, err := protocol.DecodeB64(msg.Data)
 			if err != nil {
 				c.replyExecResult(msg.MsgID, "[命令编码异常]", -1)

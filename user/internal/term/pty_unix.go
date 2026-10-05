@@ -15,7 +15,8 @@ import (
 // 全部由内核行规程完成，协助端的远程终端体验与本机终端一致。
 // 这与 Windows 端的 ConPTY 是对等实现；旧的管道 shell 无法回显、
 // 也无法处理控制字符，会造成"屏幕只有 $ 提示符、按键无反应"。
-func startShell() (Shell, error) {
+// dir 为初始工作目录（bot 重启后由服务端从库里带下来，用于恢复现场）。
+func startShell(nonce string, dir string) (Shell, error) {
 	// 1) 打开 PTY 主端
 	master, err := os.OpenFile("/dev/ptmx", os.O_RDWR, 0)
 	if err != nil {
@@ -54,11 +55,15 @@ func startShell() (Shell, error) {
 	if os.Getenv("TERM") == "" {
 		env = append(env, "TERM=xterm-256color")
 	}
+	// 提示符哨兵随 PS1 环境变量注入（不可见）；写进 shell 会被行规程回显成乱码
+	if name, value := promptEnv(nonce); name != "" {
+		env = append(env, name+"="+value)
+	}
 
 	// 5) 以新会话启动 shell，并把从端设为其控制终端：
 	//    Setsid+Setctty 之后 shell 才是会话首进程，作业控制（Ctrl+C/Ctrl+Z）才生效。
 	cmd := exec.Command(shell, "-i")
-	cmd.Dir = HomeDir()
+	cmd.Dir = dir
 	cmd.Env = env
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = slave, slave, slave
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true, Setctty: true, Ctty: 0}

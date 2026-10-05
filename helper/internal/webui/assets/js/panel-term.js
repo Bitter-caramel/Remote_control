@@ -1,22 +1,37 @@
 /* 通信控制面板：左侧机器列表 + 右侧整块终端。
-   主区就是一个真正的终端（xterm.js），没有聊天式发送框——
-   接入后按键直接透传到远端 shell，与 DOS 下的终端窗口体验一致。
-   控制权是独占的：空闲时接入即占用；被占用则排队，能看画面但不能输入。 */
+   每台机器上，每个用户各有一条独立的「操作上下文」——对应被控端一个独立 shell，
+   默认私密、互不干扰。接入某条上下文后才开始收发；输入是独占的
+   （同一时刻只有持有输入锁的人能打字）。他人的上下文要申请授权后才能观看或接续。 */
 (function () {
   "use strict";
 
   var UI = window.UI;
   var POLL_MS = 2000;
 
+  /* 访问模式/角色 → 界面文案 */
+  function roleText(role, ownerName) {
+    if (role === "owner") return "我的操作上下文";
+    if (role === "operate") return "已接续操作 · 所有者 " + (ownerName || "对方");
+    return "只读观看 · " + (ownerName || "对方") + " 的上下文";
+  }
+
+  /* store 的访问模式 → core 的订阅角色 */
+  function roleOfMode(mode) {
+    if (mode === "owner") return "owner";
+    if (mode === "operate") return "operate";
+    return "watch";
+  }
+
   function mount(ctx) {
     var sideHead = ctx.sideHead, sideBody = ctx.sideBody, stage = ctx.stage;
 
     var bots = [];
-    var currentID = null;
+    var currentBotID = null;
+    var curCtx = null;   // { ctxID, ownerName, mode, role, inputName }
     var ws = null;
     var disposed = false;
-    var mode = "observer"; // 本连接的控制权：operator | waiting | observer
-    var idleTimer = null;  // 闲置询问的本地倒计时
+    var mode = "observer"; // 本连接是否持有输入锁：operator | observer
+    var role = "watch";    // owner | operate | watch
 
     /* ---------- 主区：终端 ---------- */
 
@@ -24,7 +39,17 @@
     var head = UI.el("div", "stage-head");
     head.append(UI.el("span", "title", "终端"), UI.el("span", "grow"), statusEl);
 
-    /* 控制权提示条：排队/让位/被收回/闲置确认都走这里 */
+    /* 上下文信息条：当前接入的是谁的上下文 + 可执行动作 */
+    var ctxBar = UI.el("div", "ctx-bar");
+    var ctxInfo = UI.el("span", "ctx-info", "未接入任何操作上下文");
+    var ctxActions = UI.el("span", "inline");
+    ctxBar.append(ctxInfo, UI.el("span", "grow"), ctxActions);
+
+    /* 其它上下文入口：可切换的 / 需申请的 */
+    var ctxChoices = UI.el("div", "ctx-choices");
+    ctxChoices.hidden = true;
+
+    /* 临时提示条（申请结果、被接续、上下文结束等） */
     var banner = UI.el("div", "term-banner");
     banner.hidden = true;
     var bannerText = UI.el("span", "grow", "");
@@ -34,7 +59,7 @@
     var host = UI.el("div", "term-host");
     var body = UI.el("div", "stage-body");
     body.append(host);
-    stage.append(head, banner, body);
+    stage.append(head, ctxBar, ctxChoices, banner, body);
 
     var term = new Terminal({
       cursorBlink: true,
@@ -46,7 +71,7 @@
     var fit = new FitAddon.FitAddon();
     term.loadAddon(fit);
     term.open(host);
-    term.write("\x1b[90m在左侧选择一台机器即可接入它的终端。\x1b[0m\r\n");
+    term.write("\x1b[90m在左侧选择一台机器即可接入它的操作上下文。\x1b[0m\r\n");
 
     function fitNow() {
       try {
@@ -56,22 +81,11 @@
       }
     }
 
+    function realtime() { return role === "owner" || role === "operate"; }
+
     function setStatus(text, kind) {
       statusEl.textContent = text;
       statusEl.className = "status" + (kind ? " " + kind : "");
-    }
-
-    /* 模式 → 状态栏文案 */
-    function modeText(queue) {
-      if (mode === "operator") return "占用中";
-      if (mode === "waiting") return "排队中" + (queue ? "（第 " + queue + " 位）" : "");
-      return "观察者·只读";
-    }
-
-    function setMode(next, queue) {
-      mode = next;
-      setStatus(currentID ? "已接入 " + currentID + " · " + modeText(queue) : "未选择机器",
-        mode === "operator" ? "ok" : null);
     }
 
     function showBanner(text, kind, buttons) {
@@ -89,53 +103,95 @@
     function hideBanner() {
       banner.hidden = true;
       bannerBtns.textContent = "";
-      if (idleTimer) {
-        clearInterval(idleTimer);
-        idleTimer = null;
+    }
+
+    /* 把当前上下文同步给底部面板等功能 */
+    function publishCtx() {
+      if (!curCtx) {
+        UI.ctx.set(null);
+        return;
+      }
+      UI.ctx.set({
+        botID: currentBotID,
+        ctxID: curCtx.ctxID,
+        mode: curCtx.mode,
+        role: role,
+        ownerName: curCtx.ownerName,
+      });
+    }
+
+    function renderCtxBar() {
+      ctxActions.textContent = "";
+      if (!curCtx) {
+        ctxInfo.textContent = "未接入任何操作上下文";
+        return;
+      }
+      var who = curCtx.ownerName || "对方";
+      if (role === "owner") {
+        ctxInfo.textContent = "我的操作上下文（" + curCtx.ctxID + "）" +
+          (curCtx.inputName && curCtx.inputName !== who ? " · 输入权在 " + curCtx.inputName : "");
+      } else {
+        ctxInfo.textContent = roleText(role, who);
+        /* 只读观看且有操作能力时，给出「申请接续」入口 */
+        if (role === "watch" && UI.session.state.canOperate) {
+          var btn = UI.el("button", "mini-btn", "申请接续");
+          btn.addEventListener("click", function () {
+            requestAccess({ id: curCtx.ctxID, owner_name: curCtx.ownerName }, "operate");
+          });
+          ctxActions.append(btn);
+        }
       }
     }
 
-    /* 闲置确认：1 分钟倒计时，本地刷新文案；「是」下线，「否」重新计时 5 分钟 */
-    function showIdlePrompt(deadline) {
-      var end = deadline * 1000;
-      function tick() {
-        var left = end - Date.now();
-        if (left <= 0) {
-          showBanner("闲置确认超时，正在下线…", "bad", []);
-          if (idleTimer) {
-            clearInterval(idleTimer);
-            idleTimer = null;
+    /* 其它上下文：可切换的直接接入；未授权的给出申请入口 */
+    function renderChoices(res, activeID) {
+      ctxChoices.textContent = "";
+      var others = (res.contexts || []).filter(function (c) { return c.id !== activeID; });
+      if (others.length === 0) {
+        ctxChoices.hidden = true;
+        return;
+      }
+      ctxChoices.hidden = false;
+      ctxChoices.append(UI.el("span", "ctx-choices-label", "其它上下文："));
+      others.forEach(function (c) {
+        var who = c.owner_name || "对方";
+        if (c.mode === "none") {
+          var watchBtn = UI.el("button", "mini-btn", "申请观看 " + who);
+          watchBtn.addEventListener("click", function () { requestAccess(c, "watch"); });
+          ctxChoices.append(watchBtn);
+          if (res.can_operate) {
+            var operBtn = UI.el("button", "mini-btn", "申请接续 " + who);
+            operBtn.addEventListener("click", function () { requestAccess(c, "operate"); });
+            ctxChoices.append(operBtn);
           }
           return;
         }
-        var s = Math.ceil(left / 1000);
-        showBanner("5 分钟没有输入且机器无输出，是否下线？（" + s + " 秒后自动下线）", null, [
-          { label: "是", onClick: function () { answerIdle(true); } },
-          { label: "否", onClick: function () { answerIdle(false); } },
-        ]);
-      }
-      if (idleTimer) clearInterval(idleTimer);
-      tick();
-      idleTimer = setInterval(tick, 1000);
+        var label = who + "（" + (c.mode === "operate" ? "可接续" : "观看") + "）";
+        var pickBtn = UI.el("button", "mini-btn", label);
+        pickBtn.addEventListener("click", function () {
+          curCtx = { ctxID: c.id, ownerName: c.owner_name, mode: c.mode, role: roleOfMode(c.mode) };
+          connect(c.id);
+          renderChoices(res, c.id);
+        });
+        ctxChoices.append(pickBtn);
+      });
     }
 
-    function answerIdle(keep) {
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: "idle_answer", keep: keep }));
-      }
-      hideBanner();
-      if (!keep) {
-        showBanner("已选择继续，重新计 5 分钟无操作。", "ok", []);
-      }
+    function requestAccess(target, kind) {
+      UI.api.ctxRequest(target.id, kind).then(function () {
+        if (disposed) return;
+        showBanner("已向 " + (target.owner_name || "对方") + " 发出" +
+          (kind === "operate" ? "接续" : "观看") + "申请，等待对方同意。", "ok", []);
+      }).catch(function (e) {
+        if (!disposed) showBanner("申请失败: " + e.message, "bad", []);
+      });
     }
 
-    /* 把本终端的行列数同步给远端 PTY（尺寸只有占用者能改）。
-       必须做：远端 ConPTY 按自己记录的行数清屏，两边不一致时 cls 只会清掉
-       它已知的那几行，浏览器比远端高的话就会留下「清不掉的下半屏」。
-       除了尺寸变化，接管控制权时也要补发一次——接入时会先 fit 再收到 ready，
-       那一次 onResize 因为还不是占用者被丢掉了，否则远端会一直停在初始尺寸。 */
+    /* 把本终端的行列数同步给远端 PTY（只有实时角色能改尺寸）。
+       必须做：远端 ConPTY 按自己记录的行数清屏，两边不一致时 cls 只清掉
+       它已知的那几行，浏览器比远端高就会留下「清不掉的下半屏」。 */
     function sendSize() {
-      if (mode !== "operator") return;
+      if (!realtime()) return;
       if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: "resize", cols: term.cols, rows: term.rows }));
       }
@@ -144,14 +200,14 @@
     term.onResize(sendSize);
 
     term.onData(function (data) {
-      /* 只读与排队者的按键不发送；服务端还会再拦一道 */
+      /* 不持有输入锁时不发送；服务端还会再拦一道 */
       if (!UI.session.state.canOperate || mode !== "operator") return;
       if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: "input", data: UI.b64encode(data) }));
       }
     });
 
-    function connect(id) {
+    function connect(ctxID) {
       if (ws) {
         ws.onclose = null;
         ws.close();
@@ -159,16 +215,20 @@
       }
       hideBanner();
       term.reset();
+      mode = "observer";
+      role = curCtx ? curCtx.role : "watch";
       setStatus("连接中…", null);
+      renderCtxBar();
+      publishCtx();
 
-      var url = "ws://" + location.host + "/api/term?bot=" + encodeURIComponent(id);
+      var url = "ws://" + location.host + "/api/term?bot=" + encodeURIComponent(currentBotID) +
+        "&ctx=" + encodeURIComponent(ctxID);
       var sock = new WebSocket(url);
       ws = sock;
 
       sock.onopen = function () {
         if (disposed || ws !== sock) return;
-        mode = "observer";
-        setStatus("已接入 " + id, "ok");
+        setStatus("已接入 " + currentBotID, "ok");
         fitNow();
       };
 
@@ -185,40 +245,59 @@
             term.write(UI.b64decode(msg.data));
             break;
           case "ready":
-            setMode(msg.mode, msg.queue);
-            sendSize(); // 占用者接入时把尺寸同步过去，远端才会按本终端的行数清屏
+            role = msg.role || role;
+            mode = msg.mode || "observer";
+            if (curCtx) {
+              curCtx.role = role;
+              curCtx.mode = role === "owner" ? "owner" : (role === "operate" ? "operate" : "watch");
+              if (msg.owner_name) curCtx.ownerName = msg.owner_name;
+              curCtx.inputName = msg.holder || curCtx.inputName;
+            }
+            publishCtx();
+            renderCtxBar();
+            setStatus(currentBotID + " · " + roleText(role, curCtx && curCtx.ownerName),
+              mode === "operator" ? "ok" : null);
+            sendSize(); // 实时角色接入时把尺寸同步过去，远端才会按本终端的行数清屏
             if (mode === "operator") term.focus();
             break;
-          case "queued":
-            setMode("waiting", msg.queue);
-            showBanner(msg.text || ("已被 " + (msg.holder || "他人") + " 占用，已进入队列"), null, []);
+          case "opened":
+            showBanner(msg.text || "终端已就绪", "ok", []);
+            break;
+          case "failed":
+            showBanner("上下文开启失败: " + (msg.text || "未知原因"), "bad", []);
             break;
           case "granted":
-            setMode("operator");
+            mode = "operator";
+            if (role === "watch" && UI.session.state.canOperate) role = "operate";
+            if (curCtx) curCtx.role = role;
+            publishCtx();
+            renderCtxBar();
+            setStatus(currentBotID + " · " + roleText(role, curCtx && curCtx.ownerName), "ok");
             hideBanner();
-            showBanner(msg.text || "轮到你了，已获得控制权", "ok", []);
-            sendSize(); // 换人操作时按新占用者的终端尺寸重设远端 PTY
+            showBanner(msg.text || "你已获得输入权", "ok", []);
+            sendSize();
             term.focus();
             break;
           case "revoked":
-            setMode("observer");
+            mode = "observer";
+            if (curCtx) curCtx.inputName = "";
+            publishCtx();
+            renderCtxBar();
+            setStatus(currentBotID + " · " + roleText(role, curCtx && curCtx.ownerName), null);
             hideBanner();
-            showBanner(msg.text || "控制权已被收回", "bad", []);
-            break;
-          case "idle_prompt":
-            showIdlePrompt(msg.deadline || 0);
+            showBanner(msg.text || "输入权已被收回", "bad", []);
             break;
           case "bye": {
-            var why = msg.data || "连接已结束";
+            var why = msg.text || "连接已结束";
             term.write("\r\n\x1b[31m[" + why + "]\x1b[0m\r\n");
-            setMode("observer");
+            mode = "observer";
             setStatus(why, "bad");
             hideBanner();
             break;
           }
           case "error":
-            term.write("\r\n\x1b[31m[" + msg.data + "]\x1b[0m\r\n");
-            setStatus(msg.data, "bad");
+            term.write("\r\n\x1b[31m[" + msg.text + "]\x1b[0m\r\n");
+            setStatus(msg.text, "bad");
             break;
         }
       };
@@ -245,21 +324,13 @@
         return;
       }
       bots.forEach(function (b) {
-        var row = UI.el("div", "row" + (b.id === currentID ? " active" : ""));
+        var row = UI.el("div", "row" + (b.id === currentBotID ? " active" : ""));
         row.append(UI.el("span", "dot" + (b.buffered ? " warn" : "")));
         var main = UI.el("div", "row-main");
-        var occ = b.occupancy || { text: "无人占用", occupied: false, queue: 0, observers: 0 };
-        var occLine = UI.el("div", "row-sub occupancy" + (occ.occupied ? " busy" : ""), occ.text);
-        if (occ.observers > 0) {
-          occLine.append(UI.el("span", "occ-observer", " · " + occ.observers + " 人观察中"));
-        }
-        if (occ.queue > 0) {
-          occLine.append(UI.el("span", "occ-queue", " · " + occ.queue + " 人排队"));
-        }
         main.append(
           UI.el("div", "row-title", b.name || b.id),
           UI.el("div", "row-sub", b.id + " · " + (b.os || "未知系统")),
-          occLine
+          UI.el("div", "row-sub occupancy", (b.ctx_count || 0) + " 条操作上下文")
         );
         row.append(main);
         row.addEventListener("click", function () { select(b.id); });
@@ -267,10 +338,65 @@
       });
     }
 
-    function select(id) {
-      currentID = id;
+    function select(botID) {
+      currentBotID = botID;
       renderRows();
-      connect(id);
+      loadContexts(botID);
+    }
+
+    async function loadContexts(botID) {
+      setStatus("加载上下文中…", null);
+      var res;
+      try {
+        res = await UI.api.ctxList(botID);
+      } catch (e) {
+        if (!disposed) setStatus("无法获取上下文: " + e.message, "bad");
+        return;
+      }
+      if (disposed || currentBotID !== botID) return;
+
+      var pick = null;
+      if (res.can_operate) {
+        /* 有操作能力：优先用自己的上下文，没有就新建（幂等） */
+        pick = (res.contexts || []).filter(function (c) { return c.id === res.mine; })[0] || null;
+        if (!pick) {
+          try {
+            var created = await UI.api.ctxOpen(botID);
+            pick = { id: created.id, owner_name: created.owner_name, mode: "owner" };
+          } catch (e) {
+            if (!disposed) setStatus("打开上下文失败: " + e.message, "bad");
+          }
+        }
+      } else {
+        /* 观察者：只能接入已授权/默认开放的上下文 */
+        pick = (res.contexts || []).filter(function (c) { return c.mode !== "none"; })[0] || null;
+      }
+      if (disposed || currentBotID !== botID) return;
+
+      if (!pick) {
+        curCtx = null;
+        if (ws) {
+          ws.onclose = null;
+          ws.close();
+          ws = null;
+        }
+        UI.ctx.set(null);
+        term.reset();
+        term.write("\x1b[90m暂无可观看的操作上下文。若想观看他人操作，可在下方发起申请。\x1b[0m\r\n");
+        setStatus("暂无可观看的上下文", null);
+        renderCtxBar();
+        renderChoices(res, null);
+        return;
+      }
+
+      curCtx = {
+        ctxID: pick.id,
+        ownerName: pick.owner_name,
+        mode: pick.mode || "owner",
+        role: roleOfMode(pick.mode || "owner"),
+      };
+      connect(pick.id);
+      renderChoices(res, pick.id);
     }
 
     async function refresh() {
@@ -284,8 +410,8 @@
       if (disposed) return;
       bots = list || [];
       renderRows();
-      // 首次进入自动接入第一台在线机器
-      if (!currentID && bots.length > 0) {
+      /* 首次进入自动接入第一台在线机器 */
+      if (!currentBotID && bots.length > 0) {
         select(bots[0].id);
       }
     }
@@ -293,12 +419,8 @@
     function onWindowResize() { fitNow(); }
     window.addEventListener("resize", onWindowResize);
 
-    refreshNow();
-    var timer = setInterval(refreshNow, POLL_MS);
-
-    function refreshNow() {
-      if (!disposed) refresh();
-    }
+    refresh();
+    var timer = setInterval(function () { if (!disposed) refresh(); }, POLL_MS);
 
     if (window.UIState && window.UIState.bot) {
       select(window.UIState.bot);
@@ -313,6 +435,7 @@
         ws.onclose = null;
         ws.close();
       }
+      UI.ctx.set(null);
       term.dispose();
     };
   }

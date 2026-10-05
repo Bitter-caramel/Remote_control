@@ -1,12 +1,9 @@
 package term
 
 import (
-	"fmt"
 	"io"
 	"os"
 	"os/exec"
-	"sync"
-	"time"
 
 	"remoteassist-user/protocol"
 )
@@ -21,126 +18,16 @@ type Shell interface {
 	Close() error
 }
 
-// startShell 在当前平台启动一个交互式 shell，初始工作目录为用户主目录。
+// startShell 在当前平台启动一个交互式 shell，初始工作目录由调用方指定
+// （一般经 workDir 取「服务端记录的 cwd」或用户主目录）。
 // Windows 实现见 shell_windows.go（ConPTY 优先，管道降级），
 // 其他平台见 shell_other.go。
 
-// Sender 是 ShellManager 回传 shell 输出所需的最小能力（由 core.Client 实现）。
-// 用接口而非直接引用 core.Client：user 端 core 需要持有 ShellManager 并在读循环中
+// Sender 是 SessionManager 回传终端输出所需的最小能力（由 core.Client 实现）。
+// 用接口而非直接引用 core.Client：user 端 core 需要持有 SessionManager 并在读循环中
 // 调用它，若这里反向依赖 core 会形成包循环导入，故在此收敛为最小接口。
 type Sender interface {
 	Send(msg *protocol.Message) error
-}
-
-// ShellManager 管理当前连接的 shell：惰性启动、退出自动重启、输出泵送。
-type ShellManager struct {
-	c Sender
-
-	mu     sync.Mutex
-	shell  Shell
-	closed bool
-	cols   int // 最近一次窗口尺寸（shell 惰性创建时也要使用）
-	rows   int
-}
-
-// NewShellManager 为一个连接创建 shell 管理器（c 用于把 shell 输出回传给协助者）
-func NewShellManager(c Sender) *ShellManager {
-	return &ShellManager{c: c}
-}
-
-// Write 把协助者的键盘输入写入 shell，首次写入时启动 shell
-func (s *ShellManager) Write(p []byte) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.closed {
-		return fmt.Errorf("shell 已关闭")
-	}
-	if s.shell == nil {
-		sh, err := startShell()
-		if err != nil {
-			return err
-		}
-		if s.cols > 0 && s.rows > 0 {
-			sh.Resize(s.cols, s.rows)
-		}
-		s.shell = sh
-	}
-	_, err := s.shell.Write(p)
-	return err
-}
-
-// Resize 转发尺寸变化（shell 尚未启动时只记录）
-func (s *ShellManager) Resize(cols, rows int) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.cols, s.rows = cols, rows
-	if s.shell != nil {
-		s.shell.Resize(cols, rows)
-	}
-}
-
-// Close 结束 shell（连接断开时调用）
-func (s *ShellManager) Close() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.closed = true
-	if s.shell != nil {
-		s.shell.Close()
-		s.shell = nil
-	}
-}
-
-// restart 旧 shell 退出后重启一个新的
-func (s *ShellManager) restart(old Shell) {
-	s.mu.Lock()
-	if s.closed {
-		s.mu.Unlock()
-		return
-	}
-	if s.shell == old {
-		s.shell = nil
-	}
-	s.mu.Unlock()
-	old.Close()
-}
-
-// Pump 持续读取 shell 输出并发送给协助者；shell 退出（如输入了 exit）后自动重启。
-func (s *ShellManager) Pump() {
-	buf := make([]byte, 8192)
-	for {
-		s.mu.Lock()
-		if s.closed {
-			s.mu.Unlock()
-			return
-		}
-		sh := s.shell
-		s.mu.Unlock()
-		if sh == nil {
-			// shell 惰性启动：还没收到任何输入时不创建
-			time.Sleep(200 * time.Millisecond)
-			continue
-		}
-
-		n, err := sh.Read(buf)
-		if n > 0 {
-			// 拷贝后再异步发送，避免复用 buf 产生数据竞争
-			data := make([]byte, n)
-			copy(data, buf[:n])
-			if sendErr := s.c.Send(&protocol.Message{
-				Type: protocol.TypeOutput,
-				Data: protocol.EncodeB64(data),
-			}); sendErr != nil {
-				return // 连接已断
-			}
-		}
-		if err != nil {
-			if s.closed {
-				return
-			}
-			s.restart(sh) // shell 退出，下轮惰性重建
-			time.Sleep(300 * time.Millisecond)
-		}
-	}
 }
 
 // HomeDir 返回 shell 的初始工作目录（用户主目录，而不是 user.exe 所在目录）
@@ -149,6 +36,17 @@ func HomeDir() string {
 		return h
 	}
 	return "."
+}
+
+// workDir 选定新建 shell 的初始工作目录：优先用服务端带下来的 cwd（bot 重启后恢复现场），
+// 为空或该路径已不存在 / 不是目录时回落到用户主目录。
+func workDir(cwd string) string {
+	if cwd != "" {
+		if info, err := os.Stat(cwd); err == nil && info.IsDir() {
+			return cwd
+		}
+	}
+	return HomeDir()
 }
 
 // pipeShell 降级方案：常驻 shell 进程 + 管道（非 PTY）。
@@ -172,10 +70,12 @@ func (s *pipeShell) Close() error {
 	return s.cmd.Wait()
 }
 
-// newPipeCmd 构造一个输出合并到管道的常驻命令
-func newPipeCmd(name string, args ...string) (*pipeShell, error) {
+// newPipeCmd 构造一个输出合并到管道的常驻命令；env 为 nil 时继承当前进程环境，
+// dir 为初始工作目录
+func newPipeCmd(env []string, dir string, name string, args ...string) (*pipeShell, error) {
 	c := exec.Command(name, args...)
-	c.Dir = HomeDir()
+	c.Dir = dir
+	c.Env = env
 
 	stdin, err := c.StdinPipe()
 	if err != nil {

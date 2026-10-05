@@ -72,6 +72,12 @@ func fakeClient(t *testing.T, url, userID string) (*websocket.Conn, string) {
 				return
 			}
 			switch msg.Type {
+			case protocol.TypeCtxOpen:
+				// 上下文开启/复用：回 ctx_opened，并补一段「提示符」历史
+				_ = conn.WriteJSON(protocol.Message{
+					Type:  protocol.TypeCtxOpened,
+					CtxID: msg.CtxID,
+				})
 			case protocol.TypeInput:
 				p, err := protocol.DecodeB64(msg.Data)
 				if err != nil {
@@ -79,8 +85,9 @@ func fakeClient(t *testing.T, url, userID string) (*websocket.Conn, string) {
 				}
 				resp := append(append([]byte{}, p...), []byte("E2E-RESPONSE\r\n")...)
 				_ = conn.WriteJSON(protocol.Message{
-					Type: protocol.TypeOutput,
-					Data: protocol.EncodeB64(resp),
+					Type:  protocol.TypeOutput,
+					CtxID: msg.CtxID, // 必须按上下文回传，否则服务端无法路由
+					Data:  protocol.EncodeB64(resp),
 				})
 			case protocol.TypeExec:
 				p, err := protocol.DecodeB64(msg.Data)

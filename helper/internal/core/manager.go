@@ -83,7 +83,7 @@ func (m *Manager) Register(b *BOT) {
 	if old != nil {
 		old.Conn.Close()
 		old.Log().Sys("被同 ID 的新连接取代")
-		old.CloseSubs("连接被取代")
+		old.CloseAllSubs("连接被取代")
 		old.Log().Close()
 	}
 	m.botslog.Add(b.ID, b.NameOrDash(), b.OSOrDash(), b.Addr()) // botslog 记录连接过的主机及对应 botlog 文件名
@@ -102,7 +102,7 @@ func (m *Manager) Remove(id, reason string) {
 	b.Conn.Close()
 	m.failExecsOfBot(id) // 唤醒等待该 bot 执行结果的 CLI
 	b.Log().Sys("下线: %s", reason)
-	b.CloseSubs("机器离线") // 关闭订阅通道，桥接协程据此自然退出
+	b.CloseAllSubs("机器离线") // 关闭订阅通道，桥接协程据此自然退出
 	b.Log().Close()
 	fmt.Printf("[%s] 机器下线: %s | 名称: %s | 地址: %s — %s\n",
 		time.Now().Format("15:04:05"), id, b.NameOrDash(), b.Addr(), reason)

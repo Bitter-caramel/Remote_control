@@ -20,6 +20,13 @@ const (
 	TypeExec       = "exec"        // 服务端→用户端：执行一条一次性命令（与交互终端互不干扰），Data=命令文本
 	TypeExecResult = "exec_result" // 用户端→服务端：一次性命令的输出（base64）与退出码
 
+	// 操作上下文（Ctx）：一个用户在一台 bot 上的一条独立操作线，对应被控端一个独立 shell 进程。
+	// 授权本身不进协议（属于服务端权限数据），这里只负责把终端流按 CtxID 分流。
+	TypeCtxOpen   = "ctx_open"    // 服务端→用户端：开启/复用一条上下文（CtxID、Cols、Rows）
+	TypeCtxOpened = "ctx_opened"  // 用户端→服务端：上下文就绪（CtxID；Err 非空表示失败）
+	TypeCtxClosed = "ctx_closed"  // 用户端→服务端：该上下文的 shell 已终止
+	TypeCtxSegEnd = "ctx_seg_end" // 用户端→服务端：一段操作结束（CtxID、Seq），观看者据此同步
+
 	TypeAttach    = "attach"     // 终端窗口→主程序(本地IPC)：请求接入某 bot（UserID=botID, Data=令牌）
 	TypeAttachAck = "attach_ack" // 主程序→终端窗口：接入结果（Data="ok" 或错误原因）
 
@@ -63,6 +70,12 @@ type Message struct {
 	Rows     int    `json:"rows,omitempty"`     // resize：行数
 	OS       string `json:"os,omitempty"`       // register：被控机系统信息（如 windows/amd64 (10.0.26200)）
 	Name     string `json:"name,omitempty"`     // register：被控机自定义名称（用户在 config.json 里填写）
+
+	CtxID string `json:"ctxID,omitempty"` // 操作上下文 ID：终端类消息（input/output/resize/open…）必备
+	Seq   int    `json:"seq,omitempty"`   // ctx_seg_end：段序号，从 1 递增
+	Mode  string `json:"mode,omitempty"`  // 授权模式：watch（只读观看）| operate（可接续操作）
+	Err   string `json:"err,omitempty"`   // ctx_opened：上下文开启失败的原因
+	Cwd   string `json:"cwd,omitempty"`   // ctx_open：新建 shell 的初始工作目录（bot 重启后恢复现场）
 }
 
 // EncodeB64 把原始字节编码进消息字段

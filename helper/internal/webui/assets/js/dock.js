@@ -7,7 +7,10 @@
      name     标签页显示名
      order    排序权重，越小越靠前
      minRole  可见所需的最低角色，不填表示登录即可见
-     mount({ body, setTitle }) 在被激活时调用，返回可选的 dispose 函数
+     global   true 表示与「当前操作上下文」无关（跨机器功能），不随上下文切换重挂
+     mount({ body, ctx, setTitle }) 在被激活时调用，返回可选的 dispose 函数；
+              ctx 是当前操作上下文（{ botID, ctxID, mode, role, ownerName }），
+              非 global 标签在没有上下文时不会被挂载，而是显示占位提示。
    激活时才挂载、收起时立即卸载：没打开的功能不会占用任何网络与定时器。 */
 (function () {
   "use strict";
@@ -54,12 +57,23 @@
     bodyEl.textContent = "";
   }
 
+  function activeTab() {
+    return visibleTabs().filter(function (t) { return t.id === activeID; })[0] || null;
+  }
+
   function mountActive() {
     unmount();
-    var tab = visibleTabs().filter(function (t) { return t.id === activeID; })[0];
+    var tab = activeTab();
     if (!tab) return;
+    var cur = UI.ctx ? UI.ctx.get() : null;
+    if (!tab.global && !cur) {
+      bodyEl.append(UI.el("div", "dock-empty",
+        "请先在终端面板选择一台机器并接入一个操作上下文。"));
+      return;
+    }
     dispose = tab.mount({
       body: bodyEl,
+      ctx: tab.global ? null : cur,
       setTitle: function (text) {
         var el = bodyEl.querySelector(".dock-head .title");
         if (el) el.textContent = text;
@@ -120,6 +134,16 @@
     started = true;
     renderTabs();
     setCollapsed(true);
+
+    /* 当前操作上下文变化：非 global 的标签重挂（先卸载再按新上下文挂载） */
+    if (UI.ctx) {
+      UI.ctx.onChange(function () {
+        if (collapsed) return;
+        var tab = activeTab();
+        if (tab && tab.global) return; // 跨机器功能不受上下文切换影响
+        mountActive();
+      });
+    }
   }
 
   window.UI.dock = {

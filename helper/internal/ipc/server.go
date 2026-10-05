@@ -103,15 +103,18 @@ func (a *Server) handle(upgrader websocket.Upgrader) http.HandlerFunc {
 			return
 		}
 
-		// 3. 接入成功，订阅该 bot 的终端输出（先收到历史回放），开始桥接
+		// 3. 接入成功：本机终端窗口没有账号体系，走保留上下文 local，
+		//    订阅该上下文并让被控端开启/复用它对应的 shell。
 		conn.SetReadDeadline(time.Time{})
 		if err := conn.WriteJSON(protocol.Message{Type: protocol.TypeAttachAck, Data: "ok"}); err != nil {
 			conn.Close()
 			return
 		}
-		sub := b.Subscribe()
+		sub := b.SubscribeCtx(core.LocalCtxID,
+			core.Subscriber{Kind: core.SubLocal, Display: core.LocalOwnerName}, core.SubOwner)
 		defer sub.Close()
 		out := sub.Out
+		_ = b.Send(&protocol.Message{Type: protocol.TypeCtxOpen, CtxID: core.LocalCtxID})
 		b.Log().Sys("终端窗口接入")
 
 		done := make(chan struct{})
@@ -132,12 +135,16 @@ func (a *Server) handle(upgrader websocket.Upgrader) http.HandlerFunc {
 					if err != nil {
 						continue
 					}
-					if err := b.Send(&protocol.Message{Type: protocol.TypeInput, Data: protocol.EncodeB64(p)}); err != nil {
+					if err := b.Send(&protocol.Message{
+						Type: protocol.TypeInput, CtxID: core.LocalCtxID, Data: protocol.EncodeB64(p),
+					}); err != nil {
 						return
 					}
 				case protocol.TypeResize:
 					if msg.Cols > 0 && msg.Rows > 0 {
-						_ = b.Send(&protocol.Message{Type: protocol.TypeResize, Cols: msg.Cols, Rows: msg.Rows})
+						_ = b.Send(&protocol.Message{
+							Type: protocol.TypeResize, CtxID: core.LocalCtxID, Cols: msg.Cols, Rows: msg.Rows,
+						})
 					}
 				}
 			}

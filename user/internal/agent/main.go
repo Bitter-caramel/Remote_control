@@ -77,9 +77,12 @@ func Run() {
 		}()
 	}
 
-	// 3. 主循环：保持长连接；断开后自动重连
+	// 3. 主循环：保持长连接；断开后自动重连。
+	//    操作上下文管理器是进程级的：重连只切换输出通道，不销毁已有 shell，
+	//    否则一旦网络抖动，用户正在跑的进程和 cwd 就全丢了。
+	sessions := term.NewSessionManager()
 	for {
-		if err := session(cfg); err != nil {
+		if err := session(cfg, sessions); err != nil {
 			fmt.Printf("与协助者 (%s) 连接中断: %v，%d 秒后重试\n", cfg.ServerAddr, err, int64(retryInterval/time.Second))
 		}
 		time.Sleep(retryInterval)
@@ -89,13 +92,14 @@ func Run() {
 // retryInterval 断线重连间隔
 const retryInterval = 5 * time.Second
 
-// session 一次完整的连接会话：连接 → 注册 → 启动 shell → 心跳 → 转发终端，阻塞至断开
-func session(cfg *core.Config) error {
+// session 一次完整的连接会话：连接 → 注册 → 挂载上下文管理器 → 心跳 → 转发终端，阻塞至断开
+func session(cfg *core.Config, sessions *term.SessionManager) error {
 	conn, err := core.Dial(cfg.ServerAddr)
 	if err != nil {
 		return err
 	}
 	c := core.NewClient(cfg, conn)
+	c.Sessions = sessions
 	setActiveClient(c)
 	defer setActiveClient(nil)
 	defer conn.Close()
@@ -114,10 +118,10 @@ func session(cfg *core.Config) error {
 		fmt.Println("已获取 userID:", uid)
 	}
 
-	// 常驻交互式 shell（首次有输入时启动，退出自动重启）
-	c.Shell = term.NewShellManager(c)
-	defer c.Shell.Close()
-	go c.Shell.Pump() // shell 输出 → 协助者终端
+	// 注册成功后才把输出通道指向本连接；之后重连会换成新连接。
+	// 断开期间 Sender 为 nil，各上下文的输出直接丢弃（不会阻塞也不会串到新连接）。
+	sessions.SetSender(c)
+	defer sessions.SetSender(nil)
 
 	// 周期发送心跳
 	stop := make(chan struct{})
@@ -125,6 +129,6 @@ func session(cfg *core.Config) error {
 	core.StartHeartbeat(c, stop)
 
 	fmt.Println("已连接协助者服务器，等待指令。")
-	c.ReadLoop() // 阻塞转发协助者输入，直到连接断开
+	c.ReadLoop() // 阻塞分发协助者消息，直到连接断开
 	return fmt.Errorf("连接被关闭")
 }

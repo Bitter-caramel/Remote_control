@@ -109,9 +109,6 @@ func Run() {
 	// 后台：心跳检测
 	core.StartHeartbeatChecker(m, prog)
 
-	// 后台：闲置下线确认（占用者长时间无输入且机器无输出 → 询问是否下线）
-	core.StartIdleWatch(m, prog)
-
 	// 后台：监听端口，接收用户端连接（TCP → WebSocket）
 	// 可用环境变量 RA_LISTEN 覆盖监听地址，如 :18080
 	listenAddr := ListenAddr

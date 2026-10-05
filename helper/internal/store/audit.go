@@ -14,6 +14,12 @@ const (
 	ActionUserDelete   = "user_delete"   // 删除账号
 	ActionBotMinRole   = "bot_min_role"  // 调整机器可见等级
 	ActionBotNote      = "bot_note"      // 修改机器备注
+	ActionCtxOpen      = "ctx_open"      // 打开/创建操作上下文
+	ActionCtxRequest   = "ctx_request"   // 发起观看/接续申请
+	ActionCtxAnswer    = "ctx_answer"    // 同意/拒绝申请
+	ActionCtxGrant     = "ctx_grant"     // 主动授权（未经申请）
+	ActionCtxRevoke    = "ctx_revoke"    // 收回授权
+	ActionWatchDefault = "watch_default" // 设置用户级「默认可看」
 )
 
 // AuditEntry 一条审计记录

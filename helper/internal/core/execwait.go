@@ -9,12 +9,12 @@ import "remoteassist-helper/protocol"
 
 // BotInfo 对外（CLI/Agent）暴露的 bot 摘要信息
 type BotInfo struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"` // 自定义名称（空串表示未设置）
-	OS        string    `json:"os"`   // 系统信息
-	Addr      string    `json:"addr"`
-	Buffered  bool      `json:"buffered"`  // 是否处于心跳缓存区（疑似掉线）
-	Occupancy Occupancy `json:"occupancy"` // 占用/排队概况
+	ID       string `json:"id"`
+	Name     string `json:"name"` // 自定义名称（空串表示未设置）
+	OS       string `json:"os"`   // 系统信息
+	Addr     string `json:"addr"`
+	Buffered bool   `json:"buffered"`  // 是否处于心跳缓存区（疑似掉线）
+	CtxCount int    `json:"ctx_count"` // 当前机器上活跃的操作上下文数量
 }
 
 type execWaiter struct {
@@ -78,24 +78,13 @@ func (m *Manager) BotInfos() []BotInfo {
 	list := make([]BotInfo, 0, len(m.bots))
 	for _, b := range m.bots {
 		list = append(list, BotInfo{
-			ID:        b.ID,
-			Name:      b.Name,
-			OS:        b.OS,
-			Addr:      b.Addr(),
-			Buffered:  b.Buffered,
-			Occupancy: b.Occupancy(),
+			ID:       b.ID,
+			Name:     b.Name,
+			OS:       b.OS,
+			Addr:     b.Addr(),
+			Buffered: b.Buffered,
+			CtxCount: b.CtxCount(),
 		})
 	}
 	return list
-}
-
-// Reservations 某个接入者在所有在线机器上的预定情况（占用中 + 排队中）
-func (m *Manager) Reservations(who Subscriber) []Reservation {
-	out := make([]Reservation, 0, 4)
-	for _, b := range m.Snapshot() {
-		if r, ok := b.ReservationFor(who); ok {
-			out = append(out, r)
-		}
-	}
-	return out
 }

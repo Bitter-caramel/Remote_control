@@ -113,13 +113,31 @@ func serveBot(conn *websocket.Conn, m *core.Manager, prog *logx.ProgramLog, st *
 		case protocol.TypeHeartbeat:
 			b.LastBeat.Store(time.Now().UnixNano()) // 心跳只刷新存活时间，不写日志
 		case protocol.TypeOutput:
-			// 远端终端的原始输出：原样写入 botlog（终端录像），并广播给所有订阅者
+			// 远端某条操作上下文的原始输出：原样写入 botlog（终端录像），
+			// 并按 CtxID 路由给该上下文的订阅者（owner/operate 实时，watch 按段）
 			p, err := protocol.DecodeB64(msg.Data)
 			if err != nil {
 				continue
 			}
 			b.Log().WriteTranscript(p)
-			b.PushOut(p)
+			b.PushCtxOut(msg.CtxID, p)
+		case protocol.TypeCtxSegEnd:
+			// 一段操作结束：落库当时的 cwd（重连恢复用），并把该段推给观看者
+			cwd := ""
+			if raw, err := protocol.DecodeB64(msg.Data); err == nil {
+				cwd = string(raw)
+			}
+			if cwd != "" {
+				_ = st.UpdateCwd(msg.CtxID, cwd)
+			}
+			_ = st.RecordCommand(msg.CtxID, msg.Seq, cwd)
+			b.PushCtxSegEnd(msg.CtxID, msg.Seq)
+		case protocol.TypeCtxOpened:
+			// 上下文就绪（Err 非空表示开启失败）：转发给等待中的订阅者
+			b.NotifyCtxOpened(msg.CtxID, msg.Err)
+		case protocol.TypeCtxClosed:
+			// 该上下文的 shell 已终止：销毁内存态并断开订阅者
+			b.DropCtx(msg.CtxID, "shell 已退出")
 		case protocol.TypeBye:
 			m.Remove(b.ID, "客户端主动下线")
 			return

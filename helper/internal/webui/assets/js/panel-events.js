@@ -8,7 +8,7 @@
   var REFRESH_MS = 5000;
   var LIMIT = 300;
 
-  var KIND_TEXT = { occupy: "占用", release: "释放", queue: "排队" };
+  var KIND_TEXT = { occupy: "接入", release: "离开" };
 
   function pad(n) { return n < 10 ? "0" + n : String(n); }
 

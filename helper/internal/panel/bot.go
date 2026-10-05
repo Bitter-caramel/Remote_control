@@ -35,11 +35,15 @@ func runBotPanel(out io.Writer, sc *bufio.Scanner, m *core.Manager, id string) {
 	restore, raw, cols, rows := term.EnterRawTerminal()
 	defer restore()
 
-	// 通知远端终端尺寸，并订阅输出（先收到一段历史回放）
-	_ = b.Send(&protocol.Message{Type: protocol.TypeResize, Cols: cols, Rows: rows})
-	sub := b.Subscribe()
+	// 本机面板走保留上下文 local：先订阅（拿到历史回放），
+	// 再让被控端开启/复用它对应的 shell，并把当前终端尺寸一并带过去。
+	sub := b.SubscribeCtx(core.LocalCtxID,
+		core.Subscriber{Kind: core.SubLocal, Display: core.LocalOwnerName}, core.SubOwner)
 	defer sub.Close()
 	stream := sub.Out
+	_ = b.Send(&protocol.Message{
+		Type: protocol.TypeCtxOpen, CtxID: core.LocalCtxID, Cols: cols, Rows: rows,
+	})
 
 	var stopped atomic.Bool
 	detach := make(chan struct{})
@@ -92,8 +96,9 @@ func runRawTerminal(b *core.BOT, stream <-chan []byte, finish func(), detach, of
 					return
 				}
 				if err := b.Send(&protocol.Message{
-					Type: protocol.TypeInput,
-					Data: protocol.EncodeB64(chunk),
+					Type:  protocol.TypeInput,
+					CtxID: core.LocalCtxID,
+					Data:  protocol.EncodeB64(chunk),
 				}); err != nil {
 					finish()
 					return
@@ -156,8 +161,9 @@ func runCookedTerminal(out io.Writer, sc *bufio.Scanner, b *core.BOT, stream <-c
 		default:
 		}
 		if err := b.Send(&protocol.Message{
-			Type: protocol.TypeInput,
-			Data: protocol.EncodeB64([]byte(strings.TrimRight(line, "\r\n") + "\r\n")),
+			Type:  protocol.TypeInput,
+			CtxID: core.LocalCtxID,
+			Data:  protocol.EncodeB64([]byte(strings.TrimRight(line, "\r\n") + "\r\n")),
 		}); err != nil {
 			fmt.Fprintf(out, "发送失败（机器可能已掉线）: %v\n", err)
 			finish()

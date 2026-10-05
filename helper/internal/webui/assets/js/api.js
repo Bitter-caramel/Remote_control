@@ -44,14 +44,24 @@
       request("GET", "/api/logs?kind=" + encodeURIComponent(kind) +
         (id ? "&id=" + encodeURIComponent(id) : "")),
 
-    /* 占用/排队/释放的播报历史（服务端已按机器等级过滤） */
+    /* 接入/接续/释放的播报历史（服务端已按机器等级过滤） */
     events: (limit) =>
       request("GET", "/api/events" + (limit ? "?limit=" + encodeURIComponent(limit) : "")),
-    /* 当前用户自己正在占用/排队的机器 */
-    reservations: () => request("GET", "/api/reservations"),
-    /* 主动放弃某台机器的控制权（占用者让位 / 排队者退出队列） */
-    release: (botID) =>
-      request("POST", "/api/bots/" + encodeURIComponent(botID) + "/release", {}),
+
+    /* 操作上下文 */
+    ctxList: (botID) =>
+      request("GET", "/api/bots/" + encodeURIComponent(botID) + "/ctx"),
+    ctxOpen: (botID) =>
+      request("POST", "/api/bots/" + encodeURIComponent(botID) + "/ctx", {}),
+    ctxRequest: (ctxID, mode) =>
+      request("POST", "/api/ctx/" + encodeURIComponent(ctxID) + "/request", { mode: mode }),
+    ctxRequests: () => request("GET", "/api/ctx/requests"),
+    ctxAnswer: (id, accept) =>
+      request("POST", "/api/ctx/requests/" + encodeURIComponent(id) + "/answer", { accept: !!accept }),
+    ctxGrants: () => request("GET", "/api/ctx/grants"),
+    ctxRevoke: (id) =>
+      request("POST", "/api/ctx/grants/" + encodeURIComponent(id) + "/revoke", {}),
+    setWatchDefault: (on) => request("POST", "/api/me/watch-default", { on: !!on }),
 
     /* 机器管理（管理员） */
     botsAll: () => request("GET", "/api/bots/all"),
