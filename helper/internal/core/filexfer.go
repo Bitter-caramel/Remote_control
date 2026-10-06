@@ -5,7 +5,51 @@ package core
 // 发起方（Web 控制台的 HTTP handler）用同一个 channel 逐片等待 ack/chunk，
 // 全部完成或超时后由发起方 UnregisterFile；bot 下线时统一投递 nil 唤醒。
 
-import "remoteassist-helper/protocol"
+import (
+	"errors"
+	"time"
+
+	"remoteassist-helper/protocol"
+)
+
+// FileChunkTimeout 等待被控端逐片反馈的超时；逐片同步，超时即中断
+const FileChunkTimeout = 60 * time.Second
+
+// ErrFileTimeout 等待被控端逐片反馈超时（或机器下线，通道里收到的是 nil）
+var ErrFileTimeout = errors.New("等待被控端响应超时或机器已下线")
+
+// WaitFileAck 等待被控端回一片反馈；返回 nil 表示超时或机器下线。
+// Web 控制台与 CLI 面板两侧共用同一份逐片等待逻辑。
+func WaitFileAck(ch chan *protocol.Message) *protocol.Message {
+	select {
+	case msg := <-ch:
+		return msg
+	case <-time.After(FileChunkTimeout):
+		return nil
+	}
+}
+
+// FetchFileChunk 发一次 file_get 请求并等回对应片（下载侧用）
+func FetchFileChunk(b *BOT, fileID, path string, chunkSize, seq int,
+	ch chan *protocol.Message) (*protocol.Message, error) {
+	if err := b.Send(&protocol.Message{
+		Type:      protocol.TypeFileGet,
+		FileID:    fileID,
+		Path:      path,
+		ChunkSize: chunkSize,
+		ChunkSeq:  seq,
+	}); err != nil {
+		return nil, err
+	}
+	msg := WaitFileAck(ch)
+	if msg == nil {
+		return nil, ErrFileTimeout
+	}
+	if msg.Err != "" {
+		return nil, errors.New(msg.Err)
+	}
+	return msg, nil
+}
 
 type fileWaiter struct {
 	ch    chan *protocol.Message

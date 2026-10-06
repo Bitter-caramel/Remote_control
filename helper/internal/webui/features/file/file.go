@@ -15,13 +15,11 @@ package file
 import (
 	"crypto/rand"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"remoteassist-helper/internal/auth"
 	"remoteassist-helper/internal/core"
@@ -52,12 +50,6 @@ func mount(d feat.Deps, mux *http.ServeMux) {
 		})))
 }
 
-// fileChunkTimeout 等待被控端逐片反馈的超时；逐片同步，超时即中断
-const fileChunkTimeout = 60 * time.Second
-
-// errFileTimeout 被控端在规定时间内未回片（含机器下线）
-var errFileTimeout = errors.New("等待被控端响应超时或机器已下线")
-
 // newFileID 生成一次文件传输会话的随机 ID
 func newFileID() string {
 	buf := make([]byte, 8)
@@ -69,16 +61,6 @@ func newFileID() string {
 func baseName(p string) string {
 	p = strings.ReplaceAll(p, "\\", "/")
 	return filepath.Base(p)
-}
-
-// waitFileAck 等待被控端回一片反馈；msg 为 nil 表示超时或机器下线
-func waitFileAck(ch chan *protocol.Message) *protocol.Message {
-	select {
-	case msg := <-ch:
-		return msg
-	case <-time.After(fileChunkTimeout):
-		return nil
-	}
 }
 
 // handlePut POST /api/bots/{id}/file?name=<文件名>&path=<可选目标路径>
@@ -154,9 +136,9 @@ func handlePut(d feat.Deps, w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		ack := waitFileAck(ch)
+		ack := core.WaitFileAck(ch)
 		if ack == nil {
-			feat.WriteError(w, http.StatusGatewayTimeout, errFileTimeout.Error())
+			feat.WriteError(w, http.StatusGatewayTimeout, core.ErrFileTimeout.Error())
 			return
 		}
 		if ack.Err != "" {
@@ -215,7 +197,7 @@ func handleGet(d feat.Deps, w http.ResponseWriter, r *http.Request) {
 
 	// 先取第一片，成功拿到数据后才写响应头，好让「文件不存在」等错误
 	// 仍能以 JSON 返回，而不是污染已开始的下载流。
-	first, err := fetchFileChunk(b, fileID, path, chunkSize, 0, ch)
+	first, err := core.FetchFileChunk(b, fileID, path, chunkSize, 0, ch)
 	if err != nil {
 		feat.WriteError(w, http.StatusBadGateway, err.Error())
 		return
@@ -238,7 +220,7 @@ func handleGet(d feat.Deps, w http.ResponseWriter, r *http.Request) {
 	done := first.ChunkLast
 
 	for seq := 1; !done; seq++ {
-		chunk, err := fetchFileChunk(b, fileID, path, chunkSize, seq, ch)
+		chunk, err := core.FetchFileChunk(b, fileID, path, chunkSize, seq, ch)
 		if err != nil {
 			return // 响应头已发，无法再回 JSON，直接中断流
 		}
@@ -257,28 +239,6 @@ func handleGet(d feat.Deps, w http.ResponseWriter, r *http.Request) {
 
 	d.Audit(id, r, store.ActionFileGet, botID,
 		"下载 "+path+"（"+formatBytes(total)+"）")
-}
-
-// fetchFileChunk 发一次 file_get 请求并等回对应片
-func fetchFileChunk(b *core.BOT, fileID, path string, chunkSize, seq int,
-	ch chan *protocol.Message) (*protocol.Message, error) {
-	if err := b.Send(&protocol.Message{
-		Type:      protocol.TypeFileGet,
-		FileID:    fileID,
-		Path:      path,
-		ChunkSize: chunkSize,
-		ChunkSeq:  seq,
-	}); err != nil {
-		return nil, err
-	}
-	msg := waitFileAck(ch)
-	if msg == nil {
-		return nil, errFileTimeout
-	}
-	if msg.Err != "" {
-		return nil, errors.New(msg.Err)
-	}
-	return msg, nil
 }
 
 // formatBytes 把字节数转成人类可读的带单位文本
