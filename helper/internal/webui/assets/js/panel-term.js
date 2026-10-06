@@ -112,14 +112,25 @@
       bannerBtns.textContent = "";
     }
 
+    /* 当前选中机器的摘要（供「控制台」按机器类型定制功能使用） */
+    function currentBot() {
+      for (var i = 0; i < bots.length; i++) {
+        if (bots[i].id === currentBotID) return bots[i];
+      }
+      return null;
+    }
+
     /* 把当前上下文同步给底部面板等功能 */
     function publishCtx() {
       if (!curCtx) {
         UI.ctx.set(null);
         return;
       }
+      var bot = currentBot();
       UI.ctx.set({
         botID: currentBotID,
+        botName: bot ? bot.name : "",
+        os: bot ? bot.os : "",
         ctxID: curCtx.ctxID,
         mode: curCtx.mode,
         role: role,
