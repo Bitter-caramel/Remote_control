@@ -81,6 +81,13 @@
       }
     }
 
+    /* 终端容器尺寸一变就重新 fit：不依赖 window.resize（window 尺寸没变、但容器
+       可能因侧栏/主区布局变化而变），避免终端停留在旧行数导致显示错位或半屏空白。 */
+    var resizeObs = ("ResizeObserver" in window)
+      ? new ResizeObserver(function () { fitNow(); })
+      : null;
+    if (resizeObs) resizeObs.observe(host);
+
     function realtime() { return role === "owner" || role === "operate"; }
 
     function setStatus(text, kind) {
@@ -105,14 +112,25 @@
       bannerBtns.textContent = "";
     }
 
+    /* 当前选中机器的摘要（供「控制台」按机器类型定制功能使用） */
+    function currentBot() {
+      for (var i = 0; i < bots.length; i++) {
+        if (bots[i].id === currentBotID) return bots[i];
+      }
+      return null;
+    }
+
     /* 把当前上下文同步给底部面板等功能 */
     function publishCtx() {
       if (!curCtx) {
         UI.ctx.set(null);
         return;
       }
+      var bot = currentBot();
       UI.ctx.set({
         botID: currentBotID,
+        botName: bot ? bot.name : "",
+        os: bot ? bot.os : "",
         ctxID: curCtx.ctxID,
         mode: curCtx.mode,
         role: role,
@@ -431,6 +449,7 @@
       clearInterval(timer);
       hideBanner();
       window.removeEventListener("resize", onWindowResize);
+      if (resizeObs) resizeObs.disconnect();
       if (ws) {
         ws.onclose = null;
         ws.close();

@@ -84,6 +84,60 @@ func (s *Server) handleCtxList(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// myCtxView 我的上下文（跨机器，含已离线的机器）
+type myCtxView struct {
+	store.Context
+	BotName   string `json:"bot_name"`
+	BotNote   string `json:"bot_note"`
+	Online    bool   `json:"online"`
+	Subs      int    `json:"subs"`
+	InputName string `json:"input_name"`
+}
+
+// handleMyContexts GET /api/me/contexts
+//
+// 我拥有的全部操作上下文，跨机器一次取回，**包含已离线的机器**
+// （离线机器没有内存态，接入人数与输入持有者留空）。
+// 有了它，前端「我的上下文」不必逐台在线机器去问。
+func (s *Server) handleMyContexts(w http.ResponseWriter, r *http.Request) {
+	id, _ := auth.FromContext(r.Context())
+	list, err := s.st.ListMyContexts(id.UserID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "读取上下文失败: "+err.Error())
+		return
+	}
+
+	// 机器在线时补内存态：一台机器只查一次，顺带把它的上下文运行概况收进来
+	runtime := map[string]core.CtxView{}
+	online := map[string]bool{}
+	for _, c := range list {
+		if _, done := online[c.BotID]; done {
+			continue
+		}
+		b := s.m.Get(c.BotID)
+		online[c.BotID] = b != nil
+		if b != nil {
+			for _, v := range b.CtxViews() {
+				runtime[v.ID] = v
+			}
+		}
+	}
+
+	out := make([]myCtxView, 0, len(list))
+	for _, c := range list {
+		v := myCtxView{Context: c, Online: online[c.BotID]}
+		// 机器已从库中删除时保留 botID，仅缺名称
+		if bot, err := s.st.BotByID(c.BotID); err == nil {
+			v.BotName, v.BotNote = bot.Name, bot.Note
+		}
+		if rv, ok := runtime[c.ID]; ok {
+			v.Subs, v.InputName = rv.Subs, rv.InputName
+		}
+		out = append(out, v)
+	}
+	writeJSON(w, out)
+}
+
 // handleCtxOpen POST /api/bots/{id}/ctx
 //
 // 打开（不存在则创建）我在该机器上的上下文。幂等：已存在直接返回。

@@ -62,6 +62,12 @@
     ctxRevoke: (id) =>
       request("POST", "/api/ctx/grants/" + encodeURIComponent(id) + "/revoke", {}),
     setWatchDefault: (on) => request("POST", "/api/me/watch-default", { on: !!on }),
+    /* 我拥有的全部上下文（跨机器，含离线机器） */
+    myContexts: () => request("GET", "/api/me/contexts"),
+
+    /* 命令历史回放保留策略（管理员） */
+    replaySettings: () => request("GET", "/api/replay/settings"),
+    setReplaySettings: (cfg) => request("POST", "/api/replay/settings", cfg),
 
     /* 机器管理（管理员） */
     botsAll: () => request("GET", "/api/bots/all"),

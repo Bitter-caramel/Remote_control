@@ -9,7 +9,7 @@
 
   var UI = window.UI;
 
-  var state = { current: null }; // current = { botID, ctxID, mode, role, ownerName }
+  var state = { current: null }; // current = { botID, botName, os, ctxID, mode, role, ownerName }
   var listeners = [];
 
   function emit() {

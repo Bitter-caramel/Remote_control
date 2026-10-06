@@ -146,10 +146,16 @@
     }
   }
 
+  /* 控制台只在「终端」面板出现（其它面板不需要 bot 控制台）。
+     隐藏时顺手收起，避免后台继续跑定时器。 */
+  function setVisible(v) {
+    dockEl.classList.toggle("hidden", !v);
+    if (!v) setCollapsed(true);
+  }
+
   window.UI.dock = {
     register: register,
     start: start,
-    /* 供标签内部切换（暂未使用，保留给后续功能） */
-    activate: activate,
+    setVisible: setVisible,
   };
 })();

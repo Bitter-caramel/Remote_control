@@ -17,8 +17,9 @@ import (
 //  2. 段缓冲：每条上下文保留最近 64KB 已完成的段，供新接入者回放；
 //  3. 输入锁：同一上下文同一时刻只有一个输入持有者，防止多人同时打字互相打架。
 const (
-	// outHistoryLimit 每条上下文保留的回放上限（字节）
-	outHistoryLimit = 64 * 1024
+	// OutHistoryLimit 每条上下文保留的回放上限（字节）。
+	// webui 冷启动从库里取历史段时也用这个上限，保证「内存回放」与「库回放」口径一致。
+	OutHistoryLimit = 64 * 1024
 	// ctrlBuf 每个订阅者的控制消息缓冲（非阻塞投递，满了丢弃）
 	ctrlBuf = 8
 	// subOutBuf 每个订阅者的输出缓冲
@@ -87,6 +88,7 @@ type CtxState struct {
 	curSeg []byte   // 当前段（尚未收到段结束标记的输出）
 	segs   [][]byte // 已完成的段
 	seq    int      // 段序号（以被控端回传的为准）
+	seeded bool     // 是否已用库里的历史段播种过（每个上下文只播种一次）
 
 	inputHolder string // 输入锁持有者的 key（见 subKey），空 = 无人持有
 	inputName   string // 输入锁持有者的展示名（用于提示文案）
@@ -145,6 +147,28 @@ func (b *BOT) EnsureCtx(ctxID string, ownerID int64, ownerName string) {
 			c.inputName = ownerName
 		}
 	}
+}
+
+// SeedCtxReplay 用库里的历史段给内存回放缓冲打底（命令历史回放）。
+//
+// 只在本进程内第一次接入该上下文时调用：内存回放随 bot 下线而销毁，
+// 因此每台机器重连后会重新播种；同一进程内已有实时段时不再叠加，
+// 避免把库里的旧内容插到实时内容前面造成错序。返回值表示本次是否真的播种。
+func (b *BOT) SeedCtxReplay(ctxID string, segs [][]byte) bool {
+	if ctxID == "" || len(segs) == 0 {
+		return false
+	}
+	b.ctxMu.Lock()
+	defer b.ctxMu.Unlock()
+	c := b.ctxLocked(ctxID)
+	if c.seeded || len(c.segs) > 0 || len(c.curSeg) > 0 {
+		c.seeded = true
+		return false
+	}
+	c.seeded = true
+	c.segs = append(c.segs, segs...)
+	c.trimLocked()
+	return true
 }
 
 // DropCtx 被控端报告某条上下文已终止（shell 退出）：销毁内存状态并关闭订阅通道。
@@ -291,8 +315,8 @@ func (b *BOT) PushCtxOut(ctxID string, p []byte) {
 	defer b.ctxMu.Unlock()
 	c := b.ctxLocked(ctxID)
 	c.curSeg = append(c.curSeg, p...)
-	if len(c.curSeg) > outHistoryLimit {
-		c.curSeg = append([]byte(nil), c.curSeg[len(c.curSeg)-outHistoryLimit:]...)
+	if len(c.curSeg) > OutHistoryLimit {
+		c.curSeg = append([]byte(nil), c.curSeg[len(c.curSeg)-OutHistoryLimit:]...)
 	}
 	for _, e := range c.subs {
 		if realtime(e.role) {
@@ -482,8 +506,8 @@ func (c *CtxState) replayLocked(role string) []byte {
 	if realtime(role) {
 		buf = append(buf, c.curSeg...)
 	}
-	if len(buf) > outHistoryLimit {
-		buf = append([]byte(nil), buf[len(buf)-outHistoryLimit:]...)
+	if len(buf) > OutHistoryLimit {
+		buf = append([]byte(nil), buf[len(buf)-OutHistoryLimit:]...)
 	}
 	return buf
 }
@@ -494,7 +518,7 @@ func (c *CtxState) trimLocked() {
 	for _, s := range c.segs {
 		total += len(s)
 	}
-	for total > outHistoryLimit && len(c.segs) > 1 {
+	for total > OutHistoryLimit && len(c.segs) > 1 {
 		total -= len(c.segs[0])
 		c.segs = c.segs[1:]
 	}

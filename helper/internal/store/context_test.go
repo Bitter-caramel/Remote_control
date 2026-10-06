@@ -106,10 +106,10 @@ func TestContextAccessFlow(t *testing.T) {
 	if err := s.UpdateCwd(ctx.ID, `C:\work`); err != nil {
 		t.Fatalf("更新 cwd 失败: %v", err)
 	}
-	if err := s.RecordCommand(ctx.ID, 1, `C:\work`); err != nil {
+	if err := s.AppendSegment(ctx.ID, 1, `C:\work`, []byte("dir\r\n")); err != nil {
 		t.Fatalf("记录段失败: %v", err)
 	}
-	if err := s.RecordCommand(ctx.ID, 2, `C:\work\sub`); err != nil {
+	if err := s.AppendSegment(ctx.ID, 2, `C:\work\sub`, []byte("cd sub\r\n")); err != nil {
 		t.Fatalf("记录段失败: %v", err)
 	}
 	if got := s.LastSeq(ctx.ID); got != 2 {

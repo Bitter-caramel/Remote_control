@@ -19,7 +19,9 @@ package webui
 //	GET  /api/logs         日志读取（program / bots / botlog）
 //	GET  /api/events       接入/接续/释放的播报历史（按机器等级过滤）
 //	/api/term              终端桥接（WebSocket，按上下文路由，输入锁独占）
-//	见 context_api.go：/api/bots/{id}/ctx、/api/ctx/*（申请 / 授权 / 默认可看）
+//	插件功能（features/*）：见 features.go 导入清单与各功能包注释（当前：file 文件传输）
+//	见 context_api.go：/api/bots/{id}/ctx、/api/ctx/*、/api/me/*（申请 / 授权 / 默认可看 / 我的上下文）
+//	见 replay_api.go：/api/replay/settings（命令历史回放保留策略，管理员）
 //	见 admin.go：/api/users*、/api/bots/all、机器分级与备注
 
 import (
@@ -40,6 +42,7 @@ import (
 	"remoteassist-helper/internal/auth"
 	"remoteassist-helper/internal/core"
 	"remoteassist-helper/internal/store"
+	"remoteassist-helper/internal/webui/feat"
 	"remoteassist-helper/logx"
 	"remoteassist-helper/protocol"
 )
@@ -91,6 +94,10 @@ func Register(mux *http.ServeMux, m *core.Manager, prog *logx.ProgramLog,
 	mux.Handle("GET /api/ctx/grants", a.RequireAuth(http.HandlerFunc(s.handleCtxGrants)))
 	mux.Handle("POST /api/ctx/grants/{id}/revoke", a.RequireAuth(http.HandlerFunc(s.handleCtxRevoke)))
 	mux.Handle("POST /api/me/watch-default", a.RequireAuth(http.HandlerFunc(s.handleWatchDefault)))
+	mux.Handle("GET /api/me/contexts", a.RequireAuth(http.HandlerFunc(s.handleMyContexts)))
+
+	// 文件传输等插件功能（features/*）：从注册表统一挂载，新增功能不改这里
+	feat.MountAll(feat.Deps{M: m, Prog: prog, St: st, Auth: a}, mux)
 
 	// 机器管理（仅管理员）
 	mux.Handle("GET /api/bots/all", a.RequireAdmin(http.HandlerFunc(s.handleBotsAll)))
@@ -104,6 +111,10 @@ func Register(mux *http.ServeMux, m *core.Manager, prog *logx.ProgramLog,
 	mux.Handle("POST /api/users/{id}/password", a.RequireAdmin(http.HandlerFunc(s.handleUserPassword)))
 	mux.Handle("POST /api/users/{id}/disabled", a.RequireAdmin(http.HandlerFunc(s.handleUserDisabled)))
 	mux.Handle("DELETE /api/users/{id}", a.RequireAdmin(http.HandlerFunc(s.handleUserDelete)))
+
+	// 命令历史回放保留策略（仅管理员）
+	mux.Handle("GET /api/replay/settings", a.RequireAdmin(http.HandlerFunc(s.handleReplayGet)))
+	mux.Handle("POST /api/replay/settings", a.RequireAdmin(http.HandlerFunc(s.handleReplaySet)))
 
 	prog.Info("Web 控制台已挂载（登录鉴权已启用）")
 	return s
@@ -259,28 +270,14 @@ func (s *Server) handleLogs(w http.ResponseWriter, r *http.Request) {
 
 // ---------- 小工具 ----------
 
-func writeJSON(w http.ResponseWriter, v any) {
-	writeJSONStatus(w, http.StatusOK, v)
-}
-
-func writeJSONStatus(w http.ResponseWriter, code int, v any) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(code)
-	_ = json.NewEncoder(w).Encode(v)
-}
-
-func writeError(w http.ResponseWriter, code int, msg string) {
-	writeJSONStatus(w, code, map[string]string{"error": msg})
-}
-
-// decodeBody 解析小型 JSON 请求体（限制 4KB，避免被塞大包）
-func decodeBody(w http.ResponseWriter, r *http.Request, v any) bool {
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(v); err != nil {
-		writeError(w, http.StatusBadRequest, "请求格式错误")
-		return false
-	}
-	return true
-}
+// 写 JSON / 解析请求体的通用小工具：实现在 feat 包（插件与 webui 共用同一份），
+// 这里仅做别名，让 webui 内尚未迁移的 handler 继续用同样的名字，避免两处维护。
+var (
+	writeJSON       = feat.WriteJSON
+	writeJSONStatus = feat.WriteJSONStatus
+	writeError      = feat.WriteError
+	decodeBody      = feat.DecodeBody
+)
 
 // ---------- 浏览器终端桥接 ----------
 
@@ -449,6 +446,12 @@ func (s *Server) handleTerm(w http.ResponseWriter, r *http.Request) {
 	// 补齐内存态里的 owner 信息（被控端遗留的上下文可能还没登记 owner）
 	b.EnsureCtx(ctxID, ctx.OwnerID, ctx.OwnerName)
 
+	// 命令历史回放：内存回放为空时（helper 重启过 / 机器重连过），用库里保存的
+	// 历史段打底，接入者一上来就能看到上次的终端画面。每个上下文只播种一次。
+	if segs, err := s.st.RecentSegments(ctxID, core.OutHistoryLimit); err == nil {
+		b.SeedCtxReplay(ctxID, segs)
+	}
+
 	var wmu sync.Mutex
 	send := func(msg wsOutput) error {
 		wmu.Lock()
@@ -465,9 +468,15 @@ func (s *Server) handleTerm(w http.ResponseWriter, r *http.Request) {
 
 	// 只有 owner 负责开启被控端的 shell：watch / operate 复用 owner 建好的会话，
 	// 免得观看者接入时把 owner 的终端尺寸带偏（operate 会在获得输入权后自行 resize）。
-	// 带上 DB 记录的 cwd：bot 重启后 shell 已消失，被控端据此把新 shell 建在原工作目录。
+	// 带上 DB 记录的 cwd 与最大段序号：bot 重启后 shell 已消失，被控端据此把新 shell
+	// 建在原工作目录，并从该序号之后继续计数，保证回放顺序跨重启仍然正确。
 	if role == core.SubOwner {
-		if err := b.Send(&protocol.Message{Type: protocol.TypeCtxOpen, CtxID: ctxID, Cwd: ctx.Cwd}); err != nil {
+		if err := b.Send(&protocol.Message{
+			Type:  protocol.TypeCtxOpen,
+			CtxID: ctxID,
+			Cwd:   ctx.Cwd,
+			Seq:   s.st.LastSeq(ctxID),
+		}); err != nil {
 			return
 		}
 	}
