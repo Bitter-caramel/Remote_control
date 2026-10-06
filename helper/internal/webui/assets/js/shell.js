@@ -43,6 +43,7 @@
     Object.keys(buttons).forEach(function (k) {
       buttons[k].classList.toggle("active", k === panel.id);
     });
+    if (UI.dock) UI.dock.setVisible(panel.id === "term");
     if (location.hash.slice(1) !== panel.id) {
       history.replaceState(null, "", "#" + panel.id);
     }

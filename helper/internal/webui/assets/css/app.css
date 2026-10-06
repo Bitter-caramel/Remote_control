@@ -38,12 +38,14 @@ body {
     sans-serif;
 }
 
-/* 三栏 + 底部面板：左边导航与机器列表占满全高，底部面板只在主区下方 */
+/* 三栏 + 底部面板：左边导航与机器列表占满全高；主区也占满全高。
+   底部面板（控制台）用绝对定位覆盖在主区上，展开/收起都不改变终端的位置和大小。 */
 #app {
   display: grid;
   grid-template-columns: 60px 240px minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr) auto;
   height: 100%;
+  position: relative;
 }
 
 /* ---------- 左侧导航栏 ---------- */
@@ -545,13 +547,40 @@ body {
 /* ---------- 底部面板（仿 VSCode panel） ---------- */
 
 #dock {
-  grid-column: 3;
-  grid-row: 2;
+  position: absolute;
+  left: 300px; /* 60px 导航 + 240px 列表，与主区左缘对齐 */
+  right: 0;
+  bottom: 0;
+  z-index: 20;
   display: flex;
   flex-direction: column;
   background: #fafafa;
   border-top: 1px solid var(--border);
   max-height: 45vh;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+}
+
+#dock.hidden {
+  display: none;
+}
+
+/* 收起态：只留一个贴右下角的「展开」小按钮，不铺满宽度、不挡终端内容 */
+#dock.collapsed {
+  left: auto;
+  width: auto;
+  background: transparent;
+  border-top: 0;
+  box-shadow: none;
+}
+#dock.collapsed #dock-tabs {
+  background: #fafafa;
+  border: 1px solid var(--border);
+  border-bottom: 0;
+  border-radius: 6px 0 0 0;
+}
+#dock.collapsed .dock-tab,
+#dock.collapsed .dock-grow {
+  display: none;
 }
 
 #dock-tabs {

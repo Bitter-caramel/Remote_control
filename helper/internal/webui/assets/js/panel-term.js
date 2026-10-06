@@ -81,6 +81,13 @@
       }
     }
 
+    /* 终端容器尺寸一变就重新 fit：不依赖 window.resize（window 尺寸没变、但容器
+       可能因侧栏/主区布局变化而变），避免终端停留在旧行数导致显示错位或半屏空白。 */
+    var resizeObs = ("ResizeObserver" in window)
+      ? new ResizeObserver(function () { fitNow(); })
+      : null;
+    if (resizeObs) resizeObs.observe(host);
+
     function realtime() { return role === "owner" || role === "operate"; }
 
     function setStatus(text, kind) {
@@ -431,6 +438,7 @@
       clearInterval(timer);
       hideBanner();
       window.removeEventListener("resize", onWindowResize);
+      if (resizeObs) resizeObs.disconnect();
       if (ws) {
         ws.onclose = null;
         ws.close();
