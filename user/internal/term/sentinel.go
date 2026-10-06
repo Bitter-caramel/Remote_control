@@ -54,6 +54,24 @@ func promptEnv(nonce string) (name, value string) {
 	return "PS1", `\w \$ \[` + `\e]` + "1337;RA;" + nonce + `:\w` + `\e\\` + `\]`
 }
 
+// promptSetCommand 返回「在已运行的 shell 里重新设好带哨兵的提示符」的命令字节。
+//
+// 仅在哨兵确认失效（连续多段只靠静默兜底）后兜底使用：与启动时的环境变量注入不同，
+// 这条命令是被写进 shell 的，会被行规程回显成一行可见文本。命令本身不含真正的
+// ESC 字节（Windows 用 $E、POSIX 用 \e 字面量），所以它自己的回显不会被误判成哨兵。
+func promptSetCommand(nonce string) []byte {
+	name, value := promptEnv(nonce)
+	if name == "" || value == "" {
+		return nil
+	}
+	if runtime.GOOS == "windows" {
+		// cmd：set PROMPT=<值>；值里没有空格与 %，无需引号
+		return []byte("set " + name + "=" + value + "\r")
+	}
+	// POSIX：PS1='<值>'；值里不含单引号
+	return []byte(name + "='" + value + "'\r")
+}
+
 // sentinelEvent 一次解析产出的事件。二者按流中出现的前后顺序排列：
 //   - data 事件：可直接下发给终端的字节（哨兵已剥离）
 //   - 段边界事件：上一条命令跑完（hit=true，cwd 为提示符当时的工作目录）

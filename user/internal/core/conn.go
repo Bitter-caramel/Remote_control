@@ -78,7 +78,7 @@ func (c *Client) ReadLoop() {
 		}
 		switch msg.Type {
 		case protocol.TypeCtxOpen:
-			c.Sessions.Open(msg.CtxID, msg.Cols, msg.Rows, msg.Cwd)
+			c.Sessions.Open(msg.CtxID, msg.Cols, msg.Rows, msg.Cwd, msg.Seq)
 		case protocol.TypeInput:
 			p, err := protocol.DecodeB64(msg.Data)
 			if err != nil {

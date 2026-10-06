@@ -72,7 +72,7 @@ type Message struct {
 	Name     string `json:"name,omitempty"`     // register：被控机自定义名称（用户在 config.json 里填写）
 
 	CtxID string `json:"ctxID,omitempty"` // 操作上下文 ID：终端类消息（input/output/resize/open…）必备
-	Seq   int    `json:"seq,omitempty"`   // ctx_seg_end：段序号，从 1 递增
+	Seq   int    `json:"seq,omitempty"`   // ctx_seg_end：段序号；ctx_open：新建 shell 的起始段序号（续接历史，跨重启不回绕）
 	Mode  string `json:"mode,omitempty"`  // 授权模式：watch（只读观看）| operate（可接续操作）
 	Err   string `json:"err,omitempty"`   // ctx_opened：上下文开启失败的原因
 	Cwd   string `json:"cwd,omitempty"`   // ctx_open：新建 shell 的初始工作目录（bot 重启后恢复现场）

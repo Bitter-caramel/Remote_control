@@ -26,6 +26,11 @@ const (
 	segSilenceFallback = 800 * time.Millisecond
 	// fallbackTick 静默兜底的检查周期
 	fallbackTick = 200 * time.Millisecond
+	// promptReinjectAfter 连续多少段「只靠静默兜底、没命中哨兵」后重注入一次提示符。
+	// 用户改了 prompt（或 prompt 命令覆盖了我们注入的值）会让哨兵消失，此后段边界
+	// 只能靠静默兜底，cwd 也无法更新；这里保守地在多段之后尝试恢复一次。
+	// 阈值取得偏高，尽量降低「误把注入命令打进全屏程序」的概率。
+	promptReinjectAfter = 5
 	// gcInterval 空闲会话回收扫描周期
 	gcInterval = time.Minute
 	// sessBufSize 单次读取的缓冲大小
@@ -43,7 +48,8 @@ type session struct {
 	mu         sync.Mutex
 	cols       int
 	rows       int
-	seq        int       // 段序号，从 1 递增
+	seq        int       // 段序号，从 1 递增（重连时可由服务端下发基数续接）
+	misses     int       // 连续「未命中哨兵、只靠静默兜底」的段数，用于触发提示符重注入
 	dirty      bool      // 自上一段结束以来是否有新输出（决定静默兜底是否要封段）
 	lastOut    time.Time // 最近一次有输出的时间
 	lastActive time.Time // 最近一次活动（读或写）时间，用于 GC
@@ -93,8 +99,11 @@ func (m *SessionManager) send(msg *protocol.Message) {
 
 // Open 开启或复用一条上下文：已存在则只同步尺寸，不存在则新建 shell 并注入提示符哨兵。
 // cwd 是服务端从库里带下来的上次工作目录：bot 重启后 shell 已消失，用它在原目录重建；
-// 为空或目录不存在则落到用户主目录。结果通过 TypeCtxOpened 回传（Err 非空表示失败）。
-func (m *SessionManager) Open(ctxID string, cols, rows int, cwd string) {
+// 为空或目录不存在则落到用户主目录。baseSeq 是服务端已落库的最大段序号，
+// 新建 shell 时从它续接，保证重连前后的段序号单调（回放顺序才正确）。
+// 复用已有会话时忽略 baseSeq（该会话自己的计数是对的）。
+// 结果通过 TypeCtxOpened 回传（Err 非空表示失败）。
+func (m *SessionManager) Open(ctxID string, cols, rows int, cwd string, baseSeq int) {
 	if ctxID == "" {
 		return
 	}
@@ -132,6 +141,9 @@ func (m *SessionManager) Open(ctxID string, cols, rows int, cwd string) {
 		return
 	}
 	sh.Resize(cols, rows)
+	if baseSeq < 0 {
+		baseSeq = 0
+	}
 	s := &session{
 		id:         ctxID,
 		shell:      sh,
@@ -140,6 +152,7 @@ func (m *SessionManager) Open(ctxID string, cols, rows int, cwd string) {
 		done:       make(chan struct{}),
 		cols:       cols,
 		rows:       rows,
+		seq:        baseSeq, // 从服务端已落库的最大序号续接
 		lastOut:    time.Now(),
 		lastActive: time.Now(),
 	}
@@ -243,6 +256,10 @@ func (m *SessionManager) pump(s *session) {
 
 			for _, ev := range s.parser.feed(data) {
 				if ev.hit {
+					// 命中哨兵：说明提示符正常，连续未命中计数清零
+					s.mu.Lock()
+					s.misses = 0
+					s.mu.Unlock()
 					m.emitSeg(s, ev.cwd)
 					continue
 				}
@@ -283,9 +300,39 @@ func (m *SessionManager) fallbackLoop(s *session) {
 			s.mu.Unlock()
 			if fire {
 				m.emitSeg(s, "")
+				// 静默兜底封段 = 没命中哨兵。连续多段如此说明提示符里的哨兵
+				// 被用户改掉了，保守地重注入一次让后续段恢复精确边界与 cwd 追踪。
+				s.mu.Lock()
+				s.misses++
+				needReinject := s.misses >= promptReinjectAfter
+				if needReinject {
+					s.misses = 0
+				}
+				s.mu.Unlock()
+				if needReinject {
+					m.reinjectPrompt(s)
+				}
 			}
 		}
 	}
+}
+
+// reinjectPrompt 把带哨兵的提示符重新写进正在运行的 shell，恢复被用户改掉的哨兵。
+//
+// 这是保守兜底，不是首选手段：首选是启动时经环境变量注入（不会被回显），
+// 而这里写进去的命令会被行规程回显成一行可见文本；若此刻正停在全屏程序
+// （vim/top）里，还可能被当成按键。因此只在连续多段未命中哨兵后才触发一次。
+func (m *SessionManager) reinjectPrompt(s *session) {
+	cmd := promptSetCommand(s.nonce)
+	if len(cmd) == 0 {
+		return
+	}
+	if _, err := s.shell.Write(cmd); err != nil {
+		return
+	}
+	s.mu.Lock()
+	s.lastActive = time.Now()
+	s.mu.Unlock()
 }
 
 // gcLoop 周期回收长期无活动的会话（例如被控端一直在线但用户早已离线）
