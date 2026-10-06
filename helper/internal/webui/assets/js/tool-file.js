@@ -1,9 +1,16 @@
 /* 控制台「文件传输」工具：投放文件到被控端 / 从被控端下载文件。
    通过 UI.console.registerTool 挂进每用户每 bot 的控制台（panel-console.js）。
-   权限由后端把关：观察者（只读）会被 403 拒绝。 */
+   权限由后端把关：观察者（只读）会被 403 拒绝。
+
+   状态保留：控制台收起/切面板会卸载工具再重挂，表单状态放在本模块级的
+   cached 里跨挂载保留，重新挂载时恢复（input[type=file] 的 files 无法程序
+   化写回，所以已选文件用 File 对象本身缓存，投放时以缓存为准）。 */
 (function () {
   "use strict";
   var UI = window.UI;
+
+  /* 跨挂载保留的表单状态 */
+  var cached = { file: null, destPath: "", getPath: "" };
 
   function mount(sec, cur) {
     var botID = cur.botID;
@@ -12,17 +19,24 @@
     var putBlock = UI.el("div", null);
     var fileInput = UI.el("input", "input");
     fileInput.type = "file";
+    var fileLabel = UI.el("span", "tip", "未选择文件");
+    fileInput.addEventListener("change", function () {
+      cached.file = (fileInput.files && fileInput.files[0]) || null;
+      fileLabel.textContent = cached.file ? "已选：" + cached.file.name : "未选择文件";
+    });
     var pathInput = UI.el("input", "input");
     pathInput.placeholder = "目标路径（留空则落到 received/ 目录）";
+    pathInput.addEventListener("input", function () { cached.destPath = pathInput.value; });
     var putBtn = UI.el("button", "primary-btn", "投放文件");
     var putStatus = UI.el("div", "tip");
 
-    putBlock.append(fileInput, pathInput, putBtn, putStatus);
+    putBlock.append(fileInput, fileLabel, pathInput, putBtn, putStatus);
 
     // ---------- 下载 ----------
     var getBlock = UI.el("div", null);
     var getInput = UI.el("input", "input");
     getInput.placeholder = "被控端文件路径";
+    getInput.addEventListener("input", function () { cached.getPath = getInput.value; });
     var getBtn = UI.el("button", "primary-btn", "下载文件");
     var getStatus = UI.el("div", "tip");
 
@@ -36,8 +50,14 @@
       getBlock
     );
 
+    /* 恢复上次挂载留下的状态 */
+    pathInput.value = cached.destPath;
+    getInput.value = cached.getPath;
+    fileLabel.textContent = cached.file ? "已选：" + cached.file.name : "未选择文件";
+
     putBtn.addEventListener("click", function () {
-      var f = fileInput.files && fileInput.files[0];
+      // 重挂载后 input.files 是空的，以缓存里的 File 对象为准
+      var f = cached.file || (fileInput.files && fileInput.files[0]);
       if (!f) {
         putStatus.textContent = "请先选择文件";
         return;
@@ -95,9 +115,7 @@
 
     return function dispose() {
       putBtn.disabled = false;
-      fileInput.value = "";
-      pathInput.value = "";
-      getInput.value = "";
+      /* 不清空 cached：下次挂载继续沿用；DOM 会被外壳丢弃，无需手动清 */
     };
   }
 
