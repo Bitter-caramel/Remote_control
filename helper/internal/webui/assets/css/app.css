@@ -404,6 +404,31 @@ body {
   line-height: 1.7;
   margin-top: 8px;
 }
+
+/* ---------- 命令历史回放（管理员） ---------- */
+
+.mode-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.mode-row .mode-name {
+  flex: none;
+  font-size: 13px;
+}
+.mode-row .input {
+  width: 110px;
+  flex: none;
+}
+.mode-row .mode-unit {
+  font-size: 13px;
+  color: var(--muted);
+}
+.mode-row.off .mode-name,
+.mode-row.off .mode-unit {
+  color: var(--muted);
+}
 .tip.bad,
 .result-title.bad {
   color: var(--danger);

@@ -1,4 +1,4 @@
--- RemoteAssist 协助者端本地数据库结构（schema_version = 2）
+-- RemoteAssist 协助者端本地数据库结构（schema_version = 3）
 -- 由 store.Open 通过 go:embed 内嵌执行；所有语句均为幂等（IF NOT EXISTS），
 -- 因此重复启动不会破坏已有数据，老库升级也无需版本分支。
 
@@ -112,15 +112,30 @@ CREATE TABLE IF NOT EXISTS context_requests (
     answered_at  INTEGER NOT NULL DEFAULT 0
 );
 
--- 段（一条命令跑完）的落库记录：用于重连后恢复 cwd。
--- 注意：只记「段序号 + 当时的工作目录」，不存命令文本，
--- 因此重连可以恢复现场位置，但无法重放历史命令（与设计约定一致）。
-CREATE TABLE IF NOT EXISTS context_commands (
+-- 命令历史回放：按「段（一条命令跑完）」持久化各上下文的原始输出。
+-- 重连（helper 重启 / bot 重启）后据此把上次的终端画面重新喂给浏览器，
+-- 等价于「关掉终端前的画面还在」。data 为已剥离提示符哨兵的原始字节。
+-- 保留量由管理员在「命令历史回放」面板设定（按条数或按天数，二选一），
+-- 超出部分立即删除、不可恢复，因此本表不会无限增长。
+CREATE TABLE IF NOT EXISTS context_segments (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     context_id TEXT    NOT NULL REFERENCES contexts(id) ON DELETE CASCADE,
     seq        INTEGER NOT NULL,
     cwd        TEXT    NOT NULL DEFAULT '',
+    data       BLOB    NOT NULL,
     at         INTEGER NOT NULL
+);
+
+-- 回放保留策略（单行表，id 恒为 1）。
+-- mode = count：每条上下文最多保留 max_count 段（默认）；
+-- mode = days ：只保留最近 max_days 天内产生的段。
+-- 两者语义冲突，故设计为二选一；管理员保存后服务端立即按新策略清理。
+CREATE TABLE IF NOT EXISTS replay_settings (
+    id         INTEGER PRIMARY KEY CHECK (id = 1),
+    mode       TEXT    NOT NULL DEFAULT 'count',
+    max_count  INTEGER NOT NULL DEFAULT 200,
+    max_days   INTEGER NOT NULL DEFAULT 7,
+    updated_at INTEGER NOT NULL DEFAULT 0
 );
 
 -- 用户级偏好。单独建表而不是给 users 加列：SQLite 没有
@@ -135,4 +150,4 @@ CREATE INDEX IF NOT EXISTS idx_contexts_owner   ON contexts(owner_id);
 CREATE INDEX IF NOT EXISTS idx_contexts_bot     ON contexts(bot_id);
 CREATE INDEX IF NOT EXISTS idx_grants_grantee   ON context_grants(grantee_id);
 CREATE INDEX IF NOT EXISTS idx_requests_context ON context_requests(context_id);
-CREATE INDEX IF NOT EXISTS idx_ctx_commands_ctx ON context_commands(context_id);
+CREATE INDEX IF NOT EXISTS idx_ctx_segments_ctx ON context_segments(context_id, seq);

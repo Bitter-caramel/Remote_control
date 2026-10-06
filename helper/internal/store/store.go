@@ -29,7 +29,9 @@ const (
 // schemaVersion 当前数据库结构版本，写入 meta 表，供后续迁移判断。
 // v2：新增操作上下文相关表（contexts / context_grants / context_requests /
 // context_commands / user_prefs），全部为幂等建表，老库自动升级。
-const schemaVersion = 2
+// v3：段历史改由 context_segments 承载（新增原始输出，支持命令历史回放），
+// 并新增回放保留策略表 replay_settings；旧的 context_commands 废弃删除。
+const schemaVersion = 3
 
 //go:embed schema.sql
 var schemaSQL string
@@ -106,6 +108,11 @@ func (s *Store) Path() string { return s.path }
 func (s *Store) migrate() error {
 	if _, err := s.db.Exec(schemaSQL); err != nil {
 		return fmt.Errorf("初始化数据库结构失败: %w", err)
+	}
+	// v2→v3：段历史迁到 context_segments 后，旧的 context_commands 只存
+	// 「段序号 + 目录」且从无读取方，直接删除避免残留（幂等）。
+	if _, err := s.db.Exec(`DROP TABLE IF EXISTS context_commands`); err != nil {
+		return fmt.Errorf("清理废弃表失败: %w", err)
 	}
 	var cur string
 	err := s.db.QueryRow(`SELECT value FROM meta WHERE key = 'schema_version'`).Scan(&cur)

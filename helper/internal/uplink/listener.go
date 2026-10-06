@@ -102,6 +102,11 @@ func serveBot(conn *websocket.Conn, m *core.Manager, prog *logx.ProgramLog, st *
 		time.Now().Format("15:04:05"), b.ID, b.NameOrDash(), b.OSOrDash(), b.Addr())
 	prog.Info("bot %s 上线 %s 名称=%s 系统=%s", b.ID, b.Addr(), b.NameOrDash(), b.OSOrDash())
 
+	// 段累积缓冲：key = ctxID，value = 该段自上一段结束以来的原始输出。
+	// 段结束时落库，供重连（helper 重启 / bot 重启）后回放终端画面；
+	// 只会被本协程访问，无需加锁。本机保留上下文（local）不在库里，跳过。
+	segBuf := make(map[string][]byte)
+
 	// 5. 读循环：本协程从此只服务于这个 bot，直到连接结束
 	for {
 		var msg protocol.Message
@@ -121,8 +126,12 @@ func serveBot(conn *websocket.Conn, m *core.Manager, prog *logx.ProgramLog, st *
 			}
 			b.Log().WriteTranscript(p)
 			b.PushCtxOut(msg.CtxID, p)
+			if msg.CtxID != core.LocalCtxID {
+				segBuf[msg.CtxID] = appendSegment(segBuf[msg.CtxID], p)
+			}
 		case protocol.TypeCtxSegEnd:
-			// 一段操作结束：落库当时的 cwd（重连恢复用），并把该段推给观看者
+			// 一段操作结束：落库当时的 cwd（重连恢复现场）与整段输出（命令历史回放），
+			// 并把该段推给观看者
 			cwd := ""
 			if raw, err := protocol.DecodeB64(msg.Data); err == nil {
 				cwd = string(raw)
@@ -130,7 +139,13 @@ func serveBot(conn *websocket.Conn, m *core.Manager, prog *logx.ProgramLog, st *
 			if cwd != "" {
 				_ = st.UpdateCwd(msg.CtxID, cwd)
 			}
-			_ = st.RecordCommand(msg.CtxID, msg.Seq, cwd)
+			if msg.CtxID != core.LocalCtxID {
+				data := segBuf[msg.CtxID]
+				delete(segBuf, msg.CtxID)
+				if err := st.AppendSegment(msg.CtxID, msg.Seq, cwd, data); err != nil {
+					prog.Error("落库上下文 %s 第 %d 段失败: %v", msg.CtxID, msg.Seq, err)
+				}
+			}
 			b.PushCtxSegEnd(msg.CtxID, msg.Seq)
 		case protocol.TypeCtxOpened:
 			// 上下文就绪（Err 非空表示开启失败）：转发给等待中的订阅者
@@ -146,4 +161,14 @@ func serveBot(conn *websocket.Conn, m *core.Manager, prog *logx.ProgramLog, st *
 			m.ResolveExec(&msg)
 		}
 	}
+}
+
+// appendSegment 把新输出追加到段缓冲；超过单段上限时只保留末尾，
+// 与落库时的截断口径一致，避免超长输出在段结束前把内存撑大。
+func appendSegment(buf, p []byte) []byte {
+	buf = append(buf, p...)
+	if len(buf) > store.SegmentLimit {
+		buf = append([]byte(nil), buf[len(buf)-store.SegmentLimit:]...)
+	}
+	return buf
 }

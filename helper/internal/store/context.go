@@ -171,24 +171,6 @@ func (s *Store) UpdateCwd(ctxID, cwd string) error {
 		cwd, now, now, ctxID)
 }
 
-// RecordCommand 落一条段记录（段序号 + 当时的工作目录）
-func (s *Store) RecordCommand(ctxID string, seq int, cwd string) error {
-	_, err := s.db.Exec(`INSERT INTO context_commands (context_id, seq, cwd, at)
-		VALUES (?, ?, ?, ?)`, ctxID, seq, cwd, toTS(time.Now()))
-	return err
-}
-
-// LastSeq 该上下文已落库的最大段序号（被控端重连后从 1 重新计数，用于续接序号）
-func (s *Store) LastSeq(ctxID string) int {
-	var seq int
-	if err := s.db.QueryRow(
-		`SELECT COALESCE(MAX(seq), 0) FROM context_commands WHERE context_id = ?`,
-		ctxID).Scan(&seq); err != nil {
-		return 0
-	}
-	return seq
-}
-
 // CreateRequest 发起观看/接续申请；同一上下文同一申请人已有待处理申请时直接复用，
 // 避免用户连点造成一堆重复申请。
 func (s *Store) CreateRequest(ctxID string, requesterID int64, mode string) (*ContextRequest, error) {
