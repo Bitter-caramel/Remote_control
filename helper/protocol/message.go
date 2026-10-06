@@ -20,6 +20,13 @@ const (
 	TypeExec       = "exec"        // 服务端→用户端：执行一条一次性命令（与交互终端互不干扰），Data=命令文本
 	TypeExecResult = "exec_result" // 用户端→服务端：一次性命令的输出（base64）与退出码
 
+	// 文件传输：投放（helper→user 把文件写到被控端）与下载（helper←user 从被控端读文件）。
+	// 分片传输，Data 承载每片字节（base64），FileID 关联一段传输会话。
+	TypeFilePut      = "file_put"       // helper→user：投放一片文件数据（首片 ChunkSeq=0 带 Path/FileTotal/ChunkSize，末片 ChunkLast）
+	TypeFilePutAck   = "file_put_ack"   // user→helper：该片确认/最终结果（Err 空=成功，Path 为最终写入路径）
+	TypeFileGet      = "file_get"       // helper→user：请求下载（首片 ChunkSeq=0 带 Path；后续 ChunkSeq=N 请求下一片）
+	TypeFileGetChunk = "file_get_chunk" // user→helper：一片文件数据（末片 ChunkLast；Err 表示读取出错）
+
 	// 操作上下文（Ctx）：一个用户在一台 bot 上的一条独立操作线，对应被控端一个独立 shell 进程。
 	// 授权本身不进协议（属于服务端权限数据），这里只负责把终端流按 CtxID 分流。
 	TypeCtxOpen   = "ctx_open"    // 服务端→用户端：开启/复用一条上下文（CtxID、Cols、Rows）
@@ -55,6 +62,9 @@ const DefaultExecTimeoutSec = 120
 // MaxExecTimeoutSec 一次性命令允许的最大超时（秒）
 const MaxExecTimeoutSec = 600
 
+// DefaultFileChunkSize 文件传输默认分片大小（字节）
+const DefaultFileChunkSize = 32 * 1024
+
 // Message 两端通信的统一消息结构。
 // 终端是原始字节流（含 ANSI 控制序列，且可能在 UTF-8 多字节字符中间分包），
 // 所以 input/output 的 Data 一律使用 base64 承载，保证二进制安全、不被 JSON 损坏。
@@ -74,8 +84,15 @@ type Message struct {
 	CtxID string `json:"ctxID,omitempty"` // 操作上下文 ID：终端类消息（input/output/resize/open…）必备
 	Seq   int    `json:"seq,omitempty"`   // ctx_seg_end：段序号；ctx_open：新建 shell 的起始段序号（续接历史，跨重启不回绕）
 	Mode  string `json:"mode,omitempty"`  // 授权模式：watch（只读观看）| operate（可接续操作）
-	Err   string `json:"err,omitempty"`   // ctx_opened：上下文开启失败的原因
+	Err   string `json:"err,omitempty"`   // ctx_opened / 文件传输：出错原因
 	Cwd   string `json:"cwd,omitempty"`   // ctx_open：新建 shell 的初始工作目录（bot 重启后恢复现场）
+
+	FileID    string `json:"fileID,omitempty"`    // 文件传输会话 ID
+	Path      string `json:"path,omitempty"`      // 投放目标路径 / 下载源路径（相对路径按被控端工作目录解析）
+	FileTotal int64  `json:"fileTotal,omitempty"` // 文件总字节数（首片告知，可省略）
+	ChunkSize int    `json:"chunkSize,omitempty"` // 分片大小（首片告知）
+	ChunkSeq  int    `json:"chunkSeq,omitempty"`  // 分片序号（0 起）
+	ChunkLast bool   `json:"chunkLast,omitempty"` // 是否最后一片
 }
 
 // EncodeB64 把原始字节编码进消息字段

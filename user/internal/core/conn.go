@@ -19,11 +19,20 @@ type Client struct {
 	Conn     *websocket.Conn
 	wmu      sync.Mutex           // 保护 Conn 的并发写（终端输出、心跳协程）
 	Sessions *term.SessionManager // 进程级多操作上下文（跨重连保活，由 agent 注入）
+
+	// 文件传输会话：进程级，仅在 ReadLoop 单协程内访问（见 file.go）
+	filePuts map[string]*putSession
+	fileGets map[string]*getSession
 }
 
 // NewClient 组装一个到协助者服务器的连接（多上下文管理器由外层注入 Sessions）
 func NewClient(cfg *Config, conn *websocket.Conn) *Client {
-	return &Client{cfg: cfg, Conn: conn}
+	return &Client{
+		cfg:      cfg,
+		Conn:     conn,
+		filePuts: make(map[string]*putSession),
+		fileGets: make(map[string]*getSession),
+	}
 }
 
 // Dial 主动向协助者的服务器建立 TCP 连接，并升级为 WebSocket 长连接。
@@ -71,6 +80,7 @@ func (c *Client) Register() (string, error) {
 //
 // 未知 / 缺失 CtxID 的终端类消息直接丢弃：上下文由服务端先发 TypeCtxOpen 建立。
 func (c *Client) ReadLoop() {
+	defer c.closeFileSessions()
 	for {
 		var msg protocol.Message
 		if err := c.Conn.ReadJSON(&msg); err != nil {
@@ -98,6 +108,10 @@ func (c *Client) ReadLoop() {
 				out, code := exec.ExecOneShot(line, m.Timeout)
 				c.replyExecResult(m.MsgID, out, code)
 			}(msg, string(cmdBytes))
+		case protocol.TypeFilePut:
+			c.handleFilePut(msg)
+		case protocol.TypeFileGet:
+			c.handleFileGet(msg)
 		}
 	}
 }

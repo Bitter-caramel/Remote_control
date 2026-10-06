@@ -21,6 +21,8 @@ const (
 	ActionCtxRevoke    = "ctx_revoke"    // 收回授权
 	ActionWatchDefault = "watch_default" // 设置用户级「默认可看」
 	ActionReplayPolicy = "replay_policy" // 调整命令历史回放保留策略
+	ActionFilePut      = "file_put"      // 投放文件到被控端
+	ActionFileGet      = "file_get"      // 从被控端下载文件
 )
 
 // AuditEntry 一条审计记录

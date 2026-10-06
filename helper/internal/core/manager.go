@@ -22,6 +22,9 @@ type Manager struct {
 	execMu   sync.Mutex
 	execWait map[string]execWaiter // exec 请求待回包（MsgID→等待者）
 
+	fileMu   sync.Mutex
+	fileWait map[string]fileWaiter // 文件传输会话待回包（FileID→等待者）
+
 	events *EventLog // 占用/排队/释放的播报历史（内存环形缓冲，不落库）
 
 	logDir  string
@@ -34,6 +37,7 @@ func NewManager(logDir string, prog *logx.ProgramLog, botslog *logx.BotsLog) *Ma
 		bots:     make(map[string]*BOT),
 		buffered: make(map[string]*BOT),
 		execWait: make(map[string]execWaiter),
+		fileWait: make(map[string]fileWaiter),
 		events:   NewEventLog(eventRingSize),
 		logDir:   logDir,
 		prog:     prog,
@@ -101,6 +105,7 @@ func (m *Manager) Remove(id, reason string) {
 	}
 	b.Conn.Close()
 	m.failExecsOfBot(id) // 唤醒等待该 bot 执行结果的 CLI
+	m.failFilesOfBot(id) // 唤醒该 bot 未完成的文件传输
 	b.Log().Sys("下线: %s", reason)
 	b.CloseAllSubs("机器离线") // 关闭订阅通道，桥接协程据此自然退出
 	b.Log().Close()

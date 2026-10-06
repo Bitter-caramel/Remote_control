@@ -159,6 +159,9 @@ func serveBot(conn *websocket.Conn, m *core.Manager, prog *logx.ProgramLog, st *
 		case protocol.TypeExecResult:
 			// Agent/CLI 一次性命令的结果：投递给等待中的 CLI 桥接协程
 			m.ResolveExec(&msg)
+		case protocol.TypeFilePutAck, protocol.TypeFileGetChunk:
+			// 文件传输的逐片反馈：投递给等待中的 Web 控制台传输协程
+			m.ResolveFile(&msg)
 		}
 	}
 }
