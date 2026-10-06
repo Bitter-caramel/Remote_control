@@ -1,5 +1,5 @@
 /* 底部面板 · 上下文与授权（跨机器功能，global=true，不随当前上下文切换重挂）。
-   - 我的操作上下文（各自所属 bot、接入人数、当前输入持有者）
+   - 我的操作上下文（跨机器、含离线机器，带接入人数与当前输入持有者）
    - 待处理申请（同意 / 拒绝）
    - 我已发出的授权（收回）
    - 用户级「默认可看」开关 */
@@ -94,14 +94,15 @@
 
       mineBox.textContent = "";
       if (mine.length === 0) {
-        mineBox.append(UI.el("div", "dock-empty", "当前没有你的操作上下文（在线机器上）"));
+        mineBox.append(UI.el("div", "dock-empty", "当前没有你的操作上下文"));
       } else {
-        mine.forEach(function (m) {
-          var c = m.c;
-          var who = c.input_name ? " · 输入权在 " + c.input_name : "";
+        mine.forEach(function (c) {
+          var state = c.online
+            ? "接入 " + (c.subs || 0) + " 人" + (c.input_name ? " · 输入权在 " + c.input_name : "")
+            : "机器离线";
           mineBox.append(item(
-            (m.bot.name || m.bot.id) + "（" + m.bot.id + "）",
-            "接入 " + (c.subs || 0) + " 人" + who + " · " + c.id,
+            (c.bot_name || c.bot_id) + "（" + c.bot_id + "）",
+            state + (c.cwd ? " · " + c.cwd : "") + " · " + c.id,
             null, null, null
           ));
         });
@@ -115,12 +116,12 @@
     async function load() {
       tip.hidden = false;
       tip.textContent = "加载中…";
-      var me, reqs, grants, bots, mine;
+      var me, reqs, grants, mine;
       try {
         me = await UI.api.me();
         reqs = (await UI.api.ctxRequests()) || [];
         grants = (await UI.api.ctxGrants()) || [];
-        bots = (await UI.api.bots()) || [];
+        mine = (await UI.api.myContexts()) || [];
       } catch (e) {
         if (disposed) return;
         tip.textContent = "加载失败: " + e.message;
@@ -128,20 +129,6 @@
       }
       if (disposed) return;
       prefsChk.checked = !!me.watch_default;
-
-      mine = [];
-      for (var i = 0; i < bots.length; i++) {
-        var b = bots[i];
-        try {
-          var res = await UI.api.ctxList(b.id);
-          (res.contexts || []).forEach(function (c) {
-            if (c.id === res.mine) mine.push({ bot: b, c: c });
-          });
-        } catch (e) {
-          /* 单台机器失败不影响整体 */
-        }
-      }
-      if (disposed) return;
       render(reqs, grants, mine);
     }
 

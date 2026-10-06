@@ -149,7 +149,5 @@
   window.UI.dock = {
     register: register,
     start: start,
-    /* 供标签内部切换（暂未使用，保留给后续功能） */
-    activate: activate,
   };
 })();
