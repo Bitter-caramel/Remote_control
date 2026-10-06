@@ -261,11 +261,13 @@ body {
   font-size: 13px;
 }
 
-/* 终端：主区整块留给终端，不使用聊天式发送框 */
+/* 终端：主区整块留给终端，不使用聊天式发送框。
+   注意：.term-host 不能有 padding/border —— fit 插件按父元素「含 padding 的
+   高度」算行数（只减 .xterm 自身的 padding），父元素一有 padding 就会多算
+   近一行，终端最后一行被裁掉半行。 */
 .term-host {
   flex: 1;
   min-width: 0;
-  padding: 8px;
   background: var(--term-bg);
 }
 .term-host .xterm {
