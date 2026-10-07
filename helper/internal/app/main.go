@@ -86,7 +86,7 @@ func Run() {
 	}
 	authenticator := auth.New(st, key, auth.SessionTTL)
 
-	// 全新部署（账号表为空）时创建初始管理员，默认口令 admin
+	// 全新部署（账号表为空）时创建初始管理员，默认口令 admin123
 	if err := bootstrapAdmin(st, prog); err != nil {
 		prog.Error("创建初始管理员失败: %v", err)
 		fatalWait("创建初始管理员失败：%v", err)
@@ -142,7 +142,7 @@ func Run() {
 }
 
 // bootstrapAdmin 全新部署（账号表为空）时创建初始管理员。
-// 默认口令固定为 admin（不再随机），服务端只保存加盐哈希。
+// 默认口令固定为 admin123（不再随机），服务端只保存加盐哈希。
 func bootstrapAdmin(st *store.Store, prog *logx.ProgramLog) error {
 	n, err := st.CountUsers()
 	if err != nil {
@@ -151,7 +151,7 @@ func bootstrapAdmin(st *store.Store, prog *logx.ProgramLog) error {
 	if n > 0 {
 		return nil
 	}
-	password := "admin"
+	password := "admin123"
 	hash, salt, iterations, err := auth.HashPassword(password)
 	if err != nil {
 		return err
@@ -164,10 +164,10 @@ func bootstrapAdmin(st *store.Store, prog *logx.ProgramLog) error {
 	fmt.Println(line)
 	fmt.Println(" 首次启动：已创建初始管理员账号")
 	fmt.Println("   账号: admin")
-	fmt.Println("   口令: admin")
+	fmt.Println("   口令: admin123")
 	fmt.Println(" 默认口令，请登录后立即在【用户管理】中修改。")
 	fmt.Println(line)
-	prog.Info("已创建初始管理员账号 admin（默认口令 admin，请登录后修改）")
+	prog.Info("已创建初始管理员账号 admin（默认口令 admin123，请登录后修改）")
 	return nil
 }
 
