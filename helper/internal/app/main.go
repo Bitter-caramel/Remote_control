@@ -15,7 +15,6 @@ package app
 
 import (
 	"bufio"
-	"errors"
 	"flag"
 	"fmt"
 	"net/http"
@@ -87,15 +86,10 @@ func Run() {
 	}
 	authenticator := auth.New(st, key, auth.SessionTTL)
 
-	// 全新部署时创建初始管理员；之后每次启动把 admin 口令兜底为默认值
+	// 全新部署（账号表为空）时创建初始管理员，默认口令 admin
 	if err := bootstrapAdmin(st, prog); err != nil {
 		prog.Error("创建初始管理员失败: %v", err)
 		fatalWait("创建初始管理员失败：%v", err)
-		return
-	}
-	if err := ensureAdminDefaultPassword(st, prog); err != nil {
-		prog.Error("重置 admin 口令失败: %v", err)
-		fatalWait("重置 admin 口令失败：%v", err)
 		return
 	}
 	startSessionJanitor(st, prog)
@@ -174,29 +168,6 @@ func bootstrapAdmin(st *store.Store, prog *logx.ProgramLog) error {
 	fmt.Println(" 默认口令，请登录后立即在【用户管理】中修改。")
 	fmt.Println(line)
 	prog.Info("已创建初始管理员账号 admin（默认口令 admin，请登录后修改）")
-	return nil
-}
-
-// ensureAdminDefaultPassword 每次启动把已存在的 admin 口令兜底重置为默认值 admin，
-// 避免旧库残留随机口令导致无法登录。
-// 注意：这会让用户自行修改过的 admin 口令在每次重启后被覆盖；
-// 正式生产部署若不需要此兜底，可移除本调用。
-func ensureAdminDefaultPassword(st *store.Store, prog *logx.ProgramLog) error {
-	acc, err := st.AccountByUsername("admin")
-	if errors.Is(err, store.ErrNotFound) {
-		return nil // 账号表为空，bootstrapAdmin 刚创建
-	}
-	if err != nil {
-		return err
-	}
-	hash, salt, iterations, err := auth.HashPassword("admin")
-	if err != nil {
-		return err
-	}
-	if err := st.SetUserPassword(acc.ID, hash, salt, iterations); err != nil {
-		return err
-	}
-	prog.Info("已将 admin 口令重置为默认值 admin（请登录后修改）")
 	return nil
 }
 
