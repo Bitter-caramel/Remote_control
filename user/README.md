@@ -24,9 +24,12 @@ user/
 │   ├── core/                   #   连接与身份
 │   │   ├── config.go           #     config.json：server_addr / user_id / name
 │   │   ├── conn.go             #     建立 WebSocket、注册（上报系统与名称）、消息收发
-│   │   └── heartbeat.go        #     周期心跳
-│   ├── term/                   #   常驻交互式 shell
-│   │   ├── shell.go            #     惰性启动、退出自动重启、输出泵送
+│   │   ├── heartbeat.go        #     周期心跳
+│   │   └── file.go             #     文件传输（被控端侧）：file_put 逐片写盘 / file_get 逐片读回
+│   ├── term/                   #   常驻交互式 shell（多操作上下文：每用户一条会话）
+│   │   ├── session.go          #     操作上下文会话管理：惰性启动、段封段、空闲回收（sessionIdleTTL）
+│   │   ├── sentinel.go         #     提示符哨兵（OSC 1337;RA;）：注入与解析，定位命令执行结束点
+│   │   ├── shell.go            #     Shell 接口与平台工厂、HomeDir 初始目录
 │   │   ├── shell_windows.go    #     Windows：ConPTY 伪终端（旧系统自动降级为管道 shell）
 │   │   ├── pty_unix.go         #     Linux：/dev/ptmx 真伪终端（回显/信号/行编辑由内核行规程完成）
 │   │   └── shell_other.go      #     其它类 Unix 平台（开发自测用）：sh -i 管道
@@ -155,8 +158,11 @@ GOOS=windows GOARCH=amd64 go build -o user.exe ./cmd/user
 - 终端从你的**用户主目录**启动（Windows 为 `C:\Users\你的用户名`，Linux 为 `$HOME`），
   不是 user.exe 所在目录。
 - 这是一个完整终端：协助者可以切换任意盘/目录、设置环境变量、运行交互式程序（vim、htop 等）。
-- 你这边不会弹出新窗口，一切操作在协助者的终端里完成。终端会话在连接期间一直存活，
-  协助者临时退出面板不会关闭它。
+- **每用户一条独立会话**：每位协助者用户对这台机器拥有**自己的操作上下文**（对应本机
+  一个独立 shell 进程），各自的目录 / 环境 / 前台程序互不影响；同一台机器最多同时 5 个上下文。
+- **断线不销毁**：会话与连接解耦，协助者断开 / 退出面板后 shell 继续存活，重连后现场仍在；
+  只有**空闲超过 10 分钟**没有任何输入输出时，本机才自动回收该 shell，避免进程泄漏。
+- 你这边不会弹出新窗口，一切操作在协助者的终端里完成。
 
 ### 3. 退出
 
